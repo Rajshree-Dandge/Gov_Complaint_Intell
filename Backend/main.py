@@ -1,7 +1,7 @@
 # For communication with frontend . This is Api Layer .It sends images to detective and brain
 
 # ---1.importing lib-----
-from fastapi import FastAPI,File,Form 
+from fastapi import FastAPI,File,Form, UploadFile
 # fastapi tools for handling web request, files and text forms
 from fastapi.middleware.cors import CORSMiddleware
 # allow react frontend to talk to this py backend
@@ -19,7 +19,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     # allow any website (react localhost) to connect
-    allow_Credentials=True,
+    allow_credentials=True,
     # allow cookies or auth if needed further
     allow_methods=["*"],
     # allow all type of request
@@ -60,34 +60,41 @@ def home():
 @app.post("/submit-complaint")
 async def submit_complaint(
     # tell app that these are desc and image came from frontend
-    des: str = Form(...),
+    description: str = Form(...),
     file: UploadFile=File(...)
 ):
-
-    # --step1. save image locally---
-    file_loc=f"uploads/{file.filename}"
-    # create uploads if not there
-    os.makedirs("uploads",exist_ok=True)
     
-    # open a new file in right binary mode
-    with open(file_loc,"wb+") as file_obj:
+    try:
+
+        # --step1. save image locally---
+        file_loc=f"uploads/{file.filename}"
+        # create uploads if not there
+        os.makedirs("uploads",exist_ok=True)
+    
+        # open a new file in right binary mode
+        with open(file_loc,"wb+") as file_obj:
         # write the uplaoded image data into that file
-        file_obj.write(file.file.read())
+            file_obj.write(file.file.read())
 
-    # --step2. save data info in db---
-    conn=sqlite3.connect("grievance.db")
-    cursor=conn.cursor()
+        # --step2. save data info in db---
+        conn=sqlite3.connect("grievance.db")
+        cursor=conn.cursor()
 
-    cursor.execute('''
-    INSERT INTO complaints (text_desc,image_path) VALUES (?,?)''',(des,file_loc))
-    conn.commit()
-    conn.close()
-    return {
-        "status":"success",
-        "message": "Complaint submitted successfully",
-        "rec_text":des,
-        "image_Saved_at":file_loc
-    }
+        cursor.execute('''
+        INSERT INTO complaints (text_desc,image_path) VALUES (?,?)''',(description,file_loc))
+        conn.commit()
+        conn.close()
+        return {
+            "status":"success",
+            "message": "Complaint submitted successfully",
+            "rec_text":description,
+            "image_Saved_at":file_loc
+        }
+    except Exception as e:
+        return {
+            "status":"error",
+            "message": str(e)
+        }
 
 
 

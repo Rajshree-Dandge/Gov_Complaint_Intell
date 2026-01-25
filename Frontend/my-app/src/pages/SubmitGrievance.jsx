@@ -21,8 +21,8 @@ function SubmitGrievance (){
             });
 
             const response=await res.json();
-            if(response.ok){
-                setStatus("Success! complaint ID: "+res.message);
+            if(res.ok){
+                setStatus("Success! complaint ID: "+response.message);
                 setDes("");
                 setFile(null);
             }
@@ -39,10 +39,15 @@ function SubmitGrievance (){
     <h2>Submit</h2>
     <form action="" onSubmit={handleUpload}>
         <label htmlFor="">Describe the issue:</label><br/>
-        <textarea name="" id=""/><br/><br/>
+        <textarea
+         value={des}
+         onChange={(e)=>setDes(e.target.value)}
+         name="" id=""/><br/><br/>
 
         <label htmlFor="">Upload Photo</label><br/>
-        <input type="file" /><br/><br/>
+        <input
+        onChange={(e)=>setFile(e.target.files[0])}
+         type="file" /><br/><br/>
 
         <button type="submit">Submit</button>
     </form>
