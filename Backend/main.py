@@ -9,6 +9,10 @@ import sqlite3
 # py built in db to store complaints
 import os
 # lib to manage folders and file path on computer
+
+
+from detective import run_ai_detection    #  (Roboflow)
+# The "Mind" (Categorization/Priority)
 from brain import prioritize_complaint
 
 # ---2.creating app object-----
@@ -53,7 +57,7 @@ def init_db():
 
 
 init_db()
-logic_result=prioritize_complaint(description,ai_result)
+
 
 # ---5.ROUTES---
 @app.get("/")
@@ -80,8 +84,15 @@ async def submit_complaint(
         with open(file_loc,"wb+") as file_obj:
         # write the uplaoded image data into that file
             file_obj.write(file.file.read())
+        
+        # --step2
+        final_status="verified" if ai_result["detected"] else "rejected"
+        # --step3
+        #  CALL THE BRAIN (Logic/Prioritization)
+        # This analyzes the text + ai_result together
+        logic_result = prioritize_complaint(description, ai_result)
 
-        # --step2. save data info in db---
+        # --step4. save data info in db---
         conn=sqlite3.connect("grievance.db")
         cursor=conn.cursor()
 

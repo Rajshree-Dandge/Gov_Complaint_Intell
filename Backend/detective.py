@@ -16,4 +16,4 @@ version=project.version(1).model
 
 # 3.send the image to roboflow and returns detection result
 def run_ai(image_path):
-    prediction=model.predict(image_path,confidence=40).json()
+    ai_result=model.predict(image_path,confidence=40).json()
