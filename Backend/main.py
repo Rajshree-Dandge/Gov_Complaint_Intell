@@ -9,6 +9,7 @@ import sqlite3
 # py built in db to store complaints
 import os
 # lib to manage folders and file path on computer
+from brain import prioritize_complaint
 
 # ---2.creating app object-----
 app=FastAPI()
@@ -48,7 +49,11 @@ def init_db():
     conn.close()
     # save changes to db and terminate connection
 
+
+
+
 init_db()
+logic_result=prioritize_complaint(description,ai_result)
 
 # ---5.ROUTES---
 @app.get("/")
@@ -81,7 +86,7 @@ async def submit_complaint(
         cursor=conn.cursor()
 
         cursor.execute('''
-        INSERT INTO complaints (text_desc,image_path) VALUES (?,?)''',(description,file_loc))
+        INSERT INTO complaints (text_desc,image_path,status,priority,category) VALUES (?,?,?,?,?)''',(description,file_loc,final_status,logic_result["priority"],logic_result["category"]))
         conn.commit()
         conn.close()
         return {
