@@ -21,6 +21,7 @@ function SubmitGrievance (){
             });
 
             const response=await res.json();
+            console.log("Result:",response);
             if(res.ok){
                 setStatus("Success! complaint ID: "+response.message);
                 setDes("");
