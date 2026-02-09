@@ -4,7 +4,7 @@ from roboflow import Roboflow
 
 # --- 2. CONFIGURATION & CLOUD CONNECTION ---
 # Replace with your actual Private API Key from the Roboflow 'Deploy' tab
-API_KEY = "YOUR_PRIVATE_API_KEY" 
+API_KEY = "c5jEmDo5cIPP9Ap3LNJl" 
 
 # Creating a connection object 'rf' to log into your Roboflow account
 rf = Roboflow(api_key=API_KEY)
