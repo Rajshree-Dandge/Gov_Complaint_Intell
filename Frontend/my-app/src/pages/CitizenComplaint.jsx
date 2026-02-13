@@ -68,20 +68,45 @@ export default function CitizenComplaint() {
     if (!imageFile) newErrors.image = 'Photo evidence is required';
     return newErrors;
   };
+// 
+  const handleSubmit=async(e)=>{
+      const v=validate();
+      if(Object.keys(v).length>0){
+        setErrors(v);
+        return;
+      }
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const v = validate();
-    if (Object.keys(v).length > 0) {
-      setErrors(v);
-      return;
-    }
-    addComplaint({
-      ...form,
-      imageUrl: imagePreview,
-    });
-    setSubmitted(true);
-  };
+      // step1--create a digital envelope
+      const formData=new FormData();
+
+      // mapping React states with py names
+      formData.append("full_name", form.citizenName);
+      formData.append("phone_number", form.phone);
+      formData.append("description", form.description); // Backend handles translation
+      formData.append("location", form.location);
+      formData.append("ward_zone", form.ward);
+      formData.append("file", imageFile);
+
+      try{
+          setStatus("Processing with Ai");
+          // sending to backend
+          const response=await axios.post("http://127.0.0.1:8000/submit-complaint",formData,{
+            header:{
+              'Content-Type':'muiltipart/form-data'
+            }
+          })
+          // look in console
+          console.log(response.data);
+
+          // axios put the server response in response.data
+          if(response.status===200){
+            setSubmitted(true);
+          }
+      }catch(err){
+          console.error("in CitizenComplaint.jsx",err);
+          alert("Start uvicorn");
+      }
+  }
 
   if (submitted) {
     return (
@@ -126,12 +151,6 @@ export default function CitizenComplaint() {
           <h3>Complaint Details</h3>
 
           <div className="form-row">
-            <div className="form-group">
-              <label>Category</label>
-              <select name="category" value={form.category} onChange={handleChange}>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
             <div className="form-group">
               <label>Language</label>
               <select name="language" value={form.language} onChange={handleChange}>
