@@ -52,7 +52,7 @@ def init_db():
                    status TEXT DEFAULT 'pending',
                    priority TEXT DEFAULT 'low',
                    ai_category TEXT,
-                   ai_score REAL DEFAULT 0.0,
+                   ai_score REAL DEFAULT 0.0
                 
             )
 ''')
@@ -99,7 +99,13 @@ async def submit_complaint(
             file_obj.write(file.file.read())
         
         # --step2
+        ai_result=run_ai_detection(file_loc)
         final_status="verified" if ai_result["detected"] else "rejected"
+        if not ai_result["detected"]:
+            return {
+                "status": "rejected",
+                "message": "AI Verification Failed: No valid grievance (pothole) detected. Please upload a real photo."
+            }
         # --step3
         #  CALL THE BRAIN (Logic/Prioritization)
         # This analyzes the text + ai_result together

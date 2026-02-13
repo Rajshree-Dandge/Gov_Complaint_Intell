@@ -3,12 +3,24 @@
 # lib to check tone of text
 from textblob import TextBlob
 
+# for translation
+from deep_translator import GoogleTranslator
+
 # ---2.Priotization logic---
 # func analyze  analyzes the user text and Ai result to categorize and priortize complaint
 
+translator=GoogleTranslator()
+
 def prioritize_complaint(description,ai_result):
-    # STEP1--Categorization--
-    desc_Lower=description.lower()
+    # 1.identify and translate
+    # auto detection of languages
+    # convert to english for maintaing consistency
+    try:
+        desc_Lower=GoogleTranslator(source='auto', target='en').translate(description).lower()
+    except:
+        desc_Lower=description.lower()
+    
+    category="General"
 
     if "pothhole" in desc_Lower or ai_result['label']=='pothole' or "road" in desc_Lower:
         category="Roads & Infrastructure"
