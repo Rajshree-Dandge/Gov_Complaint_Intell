@@ -76,8 +76,14 @@ def home():
 @app.post("/submit-complaint")
 async def submit_complaint(
     # tell app that these are desc and image came from frontend
+    full_name: str = Form(...),
+    phone_number: str = Form(...),
+    category: str = Form(...),
+    language: str = Form(...),
     description: str = Form(...),
-    file: UploadFile=File(...)
+    location: str = Form(...),
+    ward_zone: str = Form(...),
+    file: UploadFile = File(...)
 ):
     
     try:
@@ -104,7 +110,17 @@ async def submit_complaint(
         cursor=conn.cursor()
 
         cursor.execute('''
-        INSERT INTO complaints (text_desc,image_path,status,priority,category) VALUES (?,?,?,?,?)''',(description,file_loc,final_status,logic_result["priority"],logic_result["category"]))
+        INSERT INTO complaints (
+            full_name, phone_number, user_category, language, 
+            text_desc, location, ward_zone, image_path, 
+            status, priority, ai_category, ai_score
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        (
+            full_name, phone_number, category, language, 
+            description, location, ward_zone, file_loc, 
+            final_status, logic_result["priority"], logic_result["category"], ai_result["confidence"]
+        ))
+                       
         conn.commit()
         conn.close()
         return {
