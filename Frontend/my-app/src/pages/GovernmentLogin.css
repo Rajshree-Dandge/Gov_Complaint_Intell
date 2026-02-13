@@ -3,90 +3,88 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background: linear-gradient(135deg, hsl(215, 50%, 23%) 0%, hsl(210, 50%, 32%) 100%);
   padding: 2rem;
 }
 
+body.dark-mode .login-page {
+  background: linear-gradient(135deg, hsl(220, 25%, 10%) 0%, hsl(220, 30%, 15%) 100%);
+}
+
 .login-card {
-  background: #fff;
+  background: var(--bg-card, hsl(0, 0%, 100%));
   border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px hsla(0, 0%, 0%, 0.3);
   width: 100%;
   max-width: 420px;
   overflow: hidden;
+  border: 1px solid var(--border-card, hsl(214, 25%, 88%));
 }
 
 .login-header {
-  background: linear-gradient(135deg, #0f3460, #1a1a2e);
-  color: #fff;
+  background: linear-gradient(135deg, hsl(215, 50%, 23%), hsl(210, 45%, 28%));
+  color: hsl(0, 0%, 100%);
   padding: 2.5rem 2rem 2rem;
   text-align: center;
 }
 
-.login-emblem {
-  font-size: 3rem;
-  display: block;
-  margin-bottom: 0.75rem;
+body.dark-mode .login-header {
+  background: linear-gradient(135deg, hsl(220, 30%, 12%), hsl(220, 25%, 18%));
 }
 
-.login-header h1 {
-  margin: 0 0 0.25rem;
-  font-size: 1.5rem;
-  font-weight: 700;
-}
+.login-emblem { font-size: 3rem; display: block; margin-bottom: 0.75rem; }
+.login-header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; font-weight: 700; }
+.login-header p { margin: 0; font-size: 0.9rem; opacity: 0.8; }
 
-.login-header p {
-  margin: 0;
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-
-.login-form {
-  padding: 2rem;
-}
+.login-form { padding: 2rem; }
 
 .login-error {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: hsl(0, 80%, 95%);
+  color: hsl(0, 60%, 40%);
   padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.875rem;
   margin-bottom: 1rem;
-  border-left: 4px solid #b91c1c;
+  border-left: 4px solid hsl(0, 60%, 40%);
 }
 
-.login-field {
-  margin-bottom: 1.25rem;
+body.dark-mode .login-error {
+  background: hsl(0, 40%, 18%);
+  color: hsl(0, 60%, 65%);
 }
+
+.login-field { margin-bottom: 1.25rem; }
 
 .login-field label {
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-secondary, hsl(215, 15%, 45%));
   margin-bottom: 0.4rem;
 }
 
 .login-field input {
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border-input, hsl(214, 25%, 88%));
   border-radius: 8px;
   font-size: 1rem;
   transition: border-color 0.2s;
   box-sizing: border-box;
+  background: var(--bg-input, hsl(210, 30%, 97%));
+  color: var(--text-primary, hsl(215, 50%, 23%));
 }
 
 .login-field input:focus {
   outline: none;
-  border-color: #0f3460;
+  border-color: var(--accent-blue, hsl(210, 65%, 45%));
 }
 
 .btn-login {
   width: 100%;
   padding: 0.85rem;
-  background: linear-gradient(135deg, #0f3460, #1a1a2e);
-  color: #fff;
+  background: linear-gradient(135deg, hsl(215, 50%, 23%), hsl(210, 45%, 28%));
+  color: hsl(0, 0%, 100%);
   border: none;
   border-radius: 8px;
   font-size: 1rem;
@@ -95,31 +93,33 @@
   transition: opacity 0.2s;
 }
 
-.btn-login:hover {
-  opacity: 0.9;
+.btn-login:hover { opacity: 0.9; }
+
+body.dark-mode .btn-login {
+  background: linear-gradient(135deg, hsl(210, 60%, 35%), hsl(210, 50%, 42%));
 }
 
 .login-demo-note {
   margin-top: 1.25rem;
   padding: 0.75rem;
-  background: #f0f9ff;
+  background: hsl(210, 70%, 95%);
   border-radius: 8px;
   font-size: 0.8rem;
-  color: #1e40af;
+  color: hsl(210, 60%, 35%);
   text-align: center;
 }
 
-.login-footer {
-  padding: 1rem 2rem 1.5rem;
-  text-align: center;
+body.dark-mode .login-demo-note {
+  background: hsl(210, 40%, 18%);
+  color: hsl(210, 60%, 60%);
 }
+
+.login-footer { padding: 1rem 2rem 1.5rem; text-align: center; }
 
 .login-footer a {
-  color: #6b7280;
+  color: var(--text-muted, hsl(215, 10%, 55%));
   text-decoration: none;
   font-size: 0.875rem;
 }
 
-.login-footer a:hover {
-  color: #0f3460;
-}
+.login-footer a:hover { color: var(--accent-blue, hsl(210, 65%, 45%)); }
