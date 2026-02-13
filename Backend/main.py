@@ -43,11 +43,18 @@ def init_db():
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS complaints(
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                   text_desc TEXT,
+                   full_name TEXT,
+                   phone_number TEXT,
+                   user_category TEXT,
+                   text_Desc TEXT,
+                   location TEXT,
                    image_path TEXT,
                    status TEXT DEFAULT 'pending',
-                   priority TEXT DEFAULT 'low'
-                   )
+                   priority TEXT DEFAULT 'low',
+                   ai_category TEXT,
+                   ai_score REAL DEFAULT 0.0,
+                
+            )
 ''')
     conn.commit()
     conn.close()
