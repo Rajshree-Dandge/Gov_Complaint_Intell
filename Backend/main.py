@@ -45,9 +45,10 @@ def init_db():
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                    full_name TEXT,
                    phone_number TEXT,
-                   user_category TEXT,
-                   text_Desc TEXT,
+                   language TEXT,
+                   text_desc TEXT,
                    location TEXT,
+                   ward_zone TEXT,
                    image_path TEXT,
                    status TEXT DEFAULT 'pending',
                    priority TEXT DEFAULT 'low',
@@ -78,7 +79,6 @@ async def submit_complaint(
     # tell app that these are desc and image came from frontend
     full_name: str = Form(...),
     phone_number: str = Form(...),
-    category: str = Form(...),
     language: str = Form(...),
     description: str = Form(...),
     location: str = Form(...),
@@ -117,12 +117,12 @@ async def submit_complaint(
 
         cursor.execute('''
         INSERT INTO complaints (
-            full_name, phone_number, user_category, language, 
+            full_name, phone_number, language, 
             text_desc, location, ward_zone, image_path, 
             status, priority, ai_category, ai_score
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         (
-            full_name, phone_number, category, language, 
+            full_name, phone_number, language, 
             description, location, ward_zone, file_loc, 
             final_status, logic_result["priority"], logic_result["category"], ai_result["confidence"]
         ))
