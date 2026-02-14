@@ -9,6 +9,7 @@ const DEMO_CREDENTIALS = {
 
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCitizenAuthenticated, setIsCitizenAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [error, setError] = useState('');
 
@@ -23,13 +24,29 @@ export function AuthProvider({ children }) {
     return false;
   };
 
+  const citizenLogin = (name, identityNumber, phone) => {
+    if (!name.trim() || !identityNumber.trim()) {
+      setError('Name and Identity Number are required');
+      return false;
+    }
+    if (identityNumber.replace(/\s/g, '').length < 10) {
+      setError('Please enter a valid identity number (minimum 10 digits)');
+      return false;
+    }
+    setIsCitizenAuthenticated(true);
+    setUser({ name, identityNumber, phone, role: 'Citizen' });
+    setError('');
+    return true;
+  };
+
   const logout = () => {
     setIsAuthenticated(false);
+    setIsCitizenAuthenticated(false);
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, error, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isCitizenAuthenticated, user, error, login, citizenLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );

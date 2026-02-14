@@ -58,7 +58,7 @@ export default function GovernmentLogin() {
         </form>
 
         <div className="login-footer">
-          <Link to="/">← Back to Citizen Portal</Link>
+          <Link to="/select-role">← Back to Role Selection</Link>
         </div>
       </div>
     </div>
