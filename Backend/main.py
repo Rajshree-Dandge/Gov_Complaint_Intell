@@ -1,4 +1,5 @@
 # For communication with frontend. This is Api Layer. It sends images to detective and brain
+
 # ---1.importing lib-----
 from fastapi import FastAPI, File, Form, UploadFile  # Tools for handling web requests and forms
 from fastapi.middleware.cors import CORSMiddleware  # Middleware to allow frontend to talk to backend
