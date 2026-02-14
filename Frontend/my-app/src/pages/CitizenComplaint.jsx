@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { useComplaints } from '../context/ComplaintContext';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import './CitizenComplaint.css';
 
 const LANGUAGES = [
@@ -17,18 +17,7 @@ const LANGUAGES = [
   { code: 'ur', label: 'اردو (Urdu)' },
 ];
 
-const CATEGORIES = [
-  'Roads',
-  'Sanitation',
-  'Water Supply',
-  'Electrical',
-  'Drainage',
-  'Parks',
-  'Other',
-];
-
 export default function CitizenComplaint() {
-  const { addComplaint } = useComplaints();
   const navigate = useNavigate();
   const fileRef = useRef(null);
 
@@ -36,7 +25,6 @@ export default function CitizenComplaint() {
     citizenName: '',
     phone: '',
     description: '',
-    category: 'Roads',
     location: '',
     ward: '',
     language: 'en',
@@ -45,6 +33,7 @@ export default function CitizenComplaint() {
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -68,45 +57,46 @@ export default function CitizenComplaint() {
     if (!imageFile) newErrors.image = 'Photo evidence is required';
     return newErrors;
   };
-// 
-  const handleSubmit=async(e)=>{
-      const v=validate();
-      if(Object.keys(v).length>0){
-        setErrors(v);
-        return;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // 1. Run Validation
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setLoading(true);
+
+    // 2. Package the data
+    const formData = new FormData();
+    formData.append("full_name", form.citizenName);
+    formData.append("phone_number", form.phone);
+    formData.append("language", form.language);
+    formData.append("description", form.description);
+    formData.append("location", form.location);
+    formData.append("ward_zone", form.ward);
+    formData.append("file", imageFile); // CRITICAL: Added the file!
+
+    try {
+      const res = await axios.post("http://127.0.0.1:8000/submit-complaint", formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data.status === "success") {
+        setSubmitted(true);
+      } else {
+        alert("Verification Failed: " + res.data.message);
       }
-
-      // step1--create a digital envelope
-      const formData=new FormData();
-
-      // mapping React states with py names
-      formData.append("full_name", form.citizenName);
-      formData.append("phone_number", form.phone);
-      formData.append("description", form.description); // Backend handles translation
-      formData.append("location", form.location);
-      formData.append("ward_zone", form.ward);
-      formData.append("file", imageFile);
-
-      try{
-          setStatus("Processing with Ai");
-          // sending to backend
-          const response=await axios.post("http://127.0.0.1:8000/submit-complaint",formData,{
-            header:{
-              'Content-Type':'muiltipart/form-data'
-            }
-          })
-          // look in console
-          console.log(response.data);
-
-          // axios put the server response in response.data
-          if(response.status===200){
-            setSubmitted(true);
-          }
-      }catch(err){
-          console.error("in CitizenComplaint.jsx",err);
-          alert("Start uvicorn");
-      }
-  }
+    } catch (err) {
+      console.error("DEBUG ERROR:", err);
+      alert("Submission error. Make sure the backend is running on port 8000.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (submitted) {
     return (
@@ -114,8 +104,8 @@ export default function CitizenComplaint() {
         <div className="success-card">
           <div className="success-icon">✓</div>
           <h2>Complaint Submitted Successfully!</h2>
-          <p>Your grievance has been registered. You will receive updates on the resolution.</p>
-          <button className="btn-primary" onClick={() => { setSubmitted(false); setForm({ citizenName: '', phone: '', description: '', category: 'Roads', location: '', ward: '', language: 'en' }); setImageFile(null); setImagePreview(null); }}>
+          <p>Your grievance has been registered and verified by AI.</p>
+          <button className="btn-primary" onClick={() => window.location.reload()}>
             Submit Another
           </button>
         </div>
@@ -137,44 +127,35 @@ export default function CitizenComplaint() {
           <div className="form-row">
             <div className="form-group">
               <label>Full Name <span className="required">*</span></label>
-              <input name="citizenName" value={form.citizenName} onChange={handleChange} placeholder="Enter your full name" />
+              <input name="citizenName" value={form.citizenName} onChange={handleChange} placeholder="Enter your name" />
               {errors.citizenName && <span className="error">{errors.citizenName}</span>}
             </div>
             <div className="form-group">
               <label>Phone Number</label>
-              <input name="phone" value={form.phone} onChange={handleChange} placeholder="Enter phone number" />
+              <input name="phone" value={form.phone} onChange={handleChange} placeholder="Enter phone" />
             </div>
           </div>
         </div>
 
         <div className="form-section">
           <h3>Complaint Details</h3>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>Language</label>
-              <select name="language" value={form.language} onChange={handleChange}>
-                {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
-              </select>
-            </div>
+          <div className="form-group">
+            <label>Language</label>
+            <select name="language" value={form.language} onChange={handleChange}>
+              {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
           </div>
 
           <div className="form-group">
             <label>Description <span className="required">*</span></label>
-            <textarea
-              name="description"
-              value={form.description}
-              onChange={handleChange}
-              placeholder="Describe the issue in detail (you may write in any language)"
-              rows={4}
-            />
+            <textarea name="description" value={form.description} onChange={handleChange} rows={4} placeholder="Describe the issue..." />
             {errors.description && <span className="error">{errors.description}</span>}
           </div>
 
           <div className="form-row">
             <div className="form-group">
               <label>Location <span className="required">*</span></label>
-              <input name="location" value={form.location} onChange={handleChange} placeholder="Street, area, landmark" />
+              <input name="location" value={form.location} onChange={handleChange} placeholder="Street/Area" />
               {errors.location && <span className="error">{errors.location}</span>}
             </div>
             <div className="form-group">
@@ -192,8 +173,7 @@ export default function CitizenComplaint() {
             ) : (
               <div className="upload-placeholder">
                 <span className="upload-icon">📷</span>
-                <p>Click to upload a photo of the issue</p>
-                <small>JPG, PNG — Max 5MB</small>
+                <p>Click to upload photo</p>
               </div>
             )}
             <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} hidden />
@@ -201,12 +181,10 @@ export default function CitizenComplaint() {
           {errors.image && <span className="error">{errors.image}</span>}
         </div>
 
-        <button type="submit" className="btn-primary btn-submit">Submit Complaint</button>
+        <button type="submit" className="btn-primary btn-submit" disabled={loading}>
+          {loading ? "Processing..." : "Submit Complaint"}
+        </button>
       </form>
-
-      <footer className="citizen-footer">
-        <a href="/login">Government Login →</a>
-      </footer>
     </div>
   );
 }

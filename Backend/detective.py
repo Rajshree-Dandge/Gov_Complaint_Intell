@@ -27,7 +27,7 @@ def run_ai_detection(image_path):
         
         # Extracting the list of found objects from the 'predictions' section of the response
         detections = prediction.get('predictions', [])
-        
+        print(prediction)
         # If the list size is greater than 0, a grievance (pothole) was found
         if len(detections) > 0:
             # Taking the result with the highest confidence (the first item)
