@@ -58,10 +58,10 @@ export default function CitizenComplaint() {
     return newErrors;
   };
 
+  const [pipelineStep, setPipelineStep] = useState(0); // 0 to 4
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // 1. Run Validation
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -69,8 +69,8 @@ export default function CitizenComplaint() {
     }
 
     setLoading(true);
+    setPipelineStep(1); // START STAGE 1
 
-    // 2. Package the data
     const formData = new FormData();
     formData.append("full_name", form.citizenName);
     formData.append("phone_number", form.phone);
@@ -78,39 +78,40 @@ export default function CitizenComplaint() {
     formData.append("description", form.description);
     formData.append("location", form.location);
     formData.append("ward_zone", form.ward);
-    formData.append("file", imageFile); // CRITICAL: Added the file!
+    formData.append("file", imageFile);
 
     try {
-      const res = await axios.post("http://127.0.0.1:8000/submit-complaint", formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // Simulate pipeline progression for UX
+      setTimeout(() => setPipelineStep(2), 1500); // Stage 2: YOLO Scan
+      setTimeout(() => setPipelineStep(3), 3000); // Stage 3: Logic Brain
+
+      const res = await axios.post("http://127.0.0.1:8000/submit-complaint", formData);
 
       if (res.data.status === "success") {
-        setSubmitted(true);
+        setPipelineStep(4); // Stage 4: Done
+        setTimeout(() => setSubmitted(true), 1000);
       } else {
-        alert("Verification Failed: " + res.data.message);
+        alert("AI REJECTION: " + res.data.message);
+        setPipelineStep(0);
       }
     } catch (err) {
-      console.error("DEBUG ERROR:", err);
-      alert("Submission error. Make sure the backend is running on port 8000.");
+      setPipelineStep(0);
+      alert("Backend Offline. Start Uvicorn on Port 8000");
     } finally {
       setLoading(false);
     }
   };
 
-  if (submitted) {
-    return (
-      <div className="citizen-page">
-        <div className="success-card">
-          <div className="success-icon">✓</div>
-          <h2>Complaint Submitted Successfully!</h2>
-          <p>Your grievance has been registered and verified by AI.</p>
-          <button className="btn-primary" onClick={() => window.location.reload()}>
-            Submit Another
-          </button>
-        </div>
+  // 3. Add this visual inside your return (Above the button)
+  {
+    loading && (
+      <div className="pipeline-container">
+        <div className={`step ${pipelineStep >= 1 ? 'active' : ''}`}>📥 Storing in DB (Pending ID)</div>
+        <div className={`step ${pipelineStep >= 2 ? 'active' : ''}`}>👁️ YOLOv11 Scanning Image...</div>
+        <div className={`step ${pipelineStep >= 3 ? 'active' : ''}`}>🧠 Brain Categorizing Issue...</div>
+        <div className={`step ${pipelineStep >= 4 ? 'active' : ''}`}>✅ Verified & Assigned to Desk</div>
       </div>
-    );
+    )
   }
 
   return (

@@ -9,7 +9,7 @@ from deep_translator import GoogleTranslator
 # ---2.Priotization logic---
 # func analyze  analyzes the user text and Ai result to categorize and priortize complaint
 
-translator=GoogleTranslator()
+
 
 def prioritize_complaint(description,ai_result):
     # 1.identify and translate
@@ -22,36 +22,39 @@ def prioritize_complaint(description,ai_result):
     
     category="General"
 
-    if "pothhole" in desc_Lower or ai_result['label']=='pothole' or "road" in desc_Lower:
-        category="Roads & Infrastructure"
-    elif "garbage" in desc_Lower or "waste" in desc_Lower or "gutter" in desc_Lower or "trash" in desc_Lower:
-        category="Sanitization & Waste"
-    elif "light" in desc_Lower or "electricity" in desc_Lower or "wire" in desc_Lower or "street light" in desc_Lower:
-        category="Electricity/Power"
+    if any(word in desc_Lower for word in ["pothole", "khadda", "road", "rasta"]):
+        category = "Roads & Infrastructure"
+    elif any(word in desc_Lower for word in ["garbage", "waste", "trash", "kachra", "gutter"]):
+        category = "Sanitation & Waste"
+    elif any(word in desc_Lower for word in ["light", "electricity", "wire", "current", "pole"]):
+        category = "Electricity/Power"
+    elif any(word in desc_Lower for word in ["leak", "water", "pipe", "pipeline", "pani"]):
+        category = "Water Supply" # Targeted fix for your pipeline idea
+
+    # If text is vague, use YOLO label
+    if category == "General" and ai_result.get('label') == 'pothole':
+        category = "Roads & Infrastructure"
 
     # STEP2--Urgency Check--
-    # TextBlob  gives polarity [-1 to 1]
-    # negative polarity means user has given dangerous suitation
-    polarity=TextBlob(description)
-    urgency_score=0
-    danger_words=["danger","urgent","accident","emergency","immediate","hazard"]
-
+    
+    urgency_score = 0
+    danger_words = ["danger", "urgent", "accident", "emergency", "fell", "deadly"]
     for word in danger_words:
         if word in desc_Lower:
-            urgency_score+=3
+            urgency_score += 3
 
-    # STEP3--FINAL PRIOTIZATION
-    final_score=(ai_result[confidence]*5)+urgency_score
+    # FINAL PRIORITIZATION (Fixed the 'confidence' variable bug)
+    # Logic: AI Confidence + Text Urgency
+    conf = ai_result.get('confidence', 0)
+    final_score = (conf * 5) + urgency_score
 
-    priority="Low"
-    if final_score>7:
-        priority="High"
-    elif final_score>4:
-        priority="Medium"
+    priority = "Low"
+    if final_score > 7: priority = "High"
+    elif final_score > 4: priority = "Medium"
     
-    return{
-        "category":category,
-        "priority":priority,
-        "score":round(final_score,1)
+    return {
+        "category": category,
+        "priority": priority,
+        "score": round(final_score, 1),
+        "eng_desc": desc_Lower
     }
-    
