@@ -185,6 +185,10 @@ export default function CitizenComplaint() {
           {loading ? "Processing..." : "Submit Complaint"}
         </button>
       </form>
+
+      <footer className="citizen-footer">
+        <a href="/select-role">← Back to Role Selection</a>
+      </footer>
     </div>
   );
 }
