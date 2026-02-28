@@ -1,3 +1,40 @@
+/* ===== Keyframes ===== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInModal {
+  from { opacity: 0; transform: scale(0.92) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulseOnce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
 /* ===== CSS Custom Properties for Theming ===== */
 :root {
   /* Light mode (default): Navy Blue & White */
@@ -89,6 +126,7 @@ body.dark-mode {
 /* Top Nav */
 .dashboard-nav {
   background: var(--bg-nav);
+  animation: fadeInDown 0.4s ease-out;
   color: var(--text-nav);
   display: flex;
   align-items: center;
@@ -153,12 +191,14 @@ body.dark-mode {
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 16px;
+  transition: background 0.2s, transform 0.2s;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .theme-toggle:hover {
   background: hsla(0, 0%, 100%, 0.25);
+  transform: rotate(20deg);
 }
 
 /* 3-Column Layout */
@@ -177,6 +217,7 @@ body.dark-mode {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  animation: fadeInLeft 0.4s ease-out 0.1s both;
 }
 
 .sidebar-label {
@@ -227,6 +268,7 @@ body.dark-mode {
 .dash-main {
   padding: 28px 32px;
   overflow-y: auto;
+  animation: fadeInUp 0.4s ease-out 0.15s both;
 }
 
 .welcome-section { margin-bottom: 28px; }
@@ -278,10 +320,18 @@ body.dark-mode .welcome-badge {
   padding: 20px;
   border: 1px solid var(--border-card);
   box-shadow: var(--shadow-card);
-  transition: border-color 0.2s;
+  transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+  animation: fadeInUp 0.4s ease-out both;
 }
 
+.stat-card:nth-child(1) { animation-delay: 0.1s; }
+.stat-card:nth-child(2) { animation-delay: 0.15s; }
+.stat-card:nth-child(3) { animation-delay: 0.2s; }
+.stat-card:nth-child(4) { animation-delay: 0.25s; }
+
 .stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px hsla(0, 0%, 0%, 0.1);
   border-color: var(--accent-blue);
 }
 
@@ -377,11 +427,13 @@ body.dark-mode .stat-trend.up {
   background: var(--bg-input);
   border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 
 .complaint-item:hover {
   background: var(--bg-hover);
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px hsla(0, 0%, 0%, 0.05);
 }
 
 .complaint-item-id {
@@ -426,6 +478,7 @@ body.dark-mode .cis-rejected { background: hsl(0, 45%, 20%); color: hsl(0, 60%, 
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
+  animation: fadeInRight 0.4s ease-out 0.2s both;
 }
 
 .right-section-title {
@@ -449,6 +502,12 @@ body.dark-mode .cis-rejected { background: hsl(0, 45%, 20%); color: hsl(0, 60%, 
   background: var(--bg-card);
   border-radius: 10px;
   border: 1px solid var(--border-card);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.tracking-card:hover {
+  transform: translateX(-3px);
+  box-shadow: 0 2px 10px hsla(0, 0%, 0%, 0.06);
 }
 
 .tracking-label {
@@ -585,10 +644,13 @@ body.dark-mode .cis-rejected { background: hsl(0, 45%, 20%); color: hsl(0, 60%, 
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+  animation: fadeInOverlay 0.25s ease-out;
+  backdrop-filter: blur(4px);
 }
 
 .modal-card {
   background: var(--bg-modal);
+  animation: slideInModal 0.35s ease-out;
   border-radius: 16px;
   padding: 32px;
   max-width: 600px;

@@ -18,40 +18,40 @@
   50% { background-position: 100% 50%; }
 }
 
-.login-page {
+.citizen-login-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, hsl(215, 50%, 23%) 0%, hsl(210, 50%, 32%) 50%, hsl(215, 45%, 27%) 100%);
+  background: linear-gradient(135deg, hsl(210, 50%, 30%) 0%, hsl(210, 55%, 40%) 50%, hsl(210, 48%, 34%) 100%);
   background-size: 200% 200%;
   animation: bgShift 8s ease-in-out infinite;
   padding: 2rem;
 }
 
-body.dark-mode .login-page {
+body.dark-mode .citizen-login-page {
   background: linear-gradient(135deg, hsl(220, 25%, 10%) 0%, hsl(220, 30%, 15%) 50%, hsl(220, 25%, 12%) 100%);
   background-size: 200% 200%;
 }
 
-.login-card {
+.citizen-login-card {
   background: var(--bg-card, hsl(0, 0%, 100%));
   border-radius: 20px;
   box-shadow: 0 25px 70px hsla(0, 0%, 0%, 0.3);
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   overflow: hidden;
   border: 1px solid var(--border-card, hsl(214, 25%, 88%));
   animation: fadeInScale 0.5s ease-out;
 }
 
-body.dark-mode .login-card {
+body.dark-mode .citizen-login-card {
   background: hsl(220, 25%, 13%);
   border-color: hsl(220, 20%, 20%);
 }
 
-.login-header {
-  background: linear-gradient(135deg, hsl(215, 50%, 23%), hsl(210, 45%, 30%));
+.citizen-login-header {
+  background: linear-gradient(135deg, hsl(210, 50%, 30%), hsl(210, 55%, 38%));
   color: hsl(0, 0%, 100%);
   padding: 2.5rem 2rem 2rem;
   text-align: center;
@@ -59,46 +59,46 @@ body.dark-mode .login-card {
   overflow: hidden;
 }
 
-.login-header::after {
+.citizen-login-header::after {
   content: '';
   position: absolute;
   bottom: -30px; right: -30px;
   width: 100px; height: 100px;
   border-radius: 50%;
-  background: hsla(45, 100%, 55%, 0.08);
+  background: hsla(210, 80%, 60%, 0.08);
 }
 
-body.dark-mode .login-header {
+body.dark-mode .citizen-login-header {
   background: linear-gradient(135deg, hsl(220, 30%, 12%), hsl(220, 25%, 18%));
 }
 
-.login-emblem {
+.citizen-login-emblem {
   font-size: 3rem;
   display: block;
   margin-bottom: 0.75rem;
   animation: slideDown 0.5s ease-out 0.2s both;
 }
 
-.login-header h1 {
+.citizen-login-header h1 {
   margin: 0 0 0.25rem;
   font-size: 1.5rem;
   font-weight: 700;
   animation: slideDown 0.5s ease-out 0.3s both;
 }
 
-.login-header p {
+.citizen-login-header p {
   margin: 0;
   font-size: 0.9rem;
   opacity: 0.8;
   animation: slideDown 0.5s ease-out 0.4s both;
 }
 
-.login-form {
+.citizen-login-form {
   padding: 2rem;
   animation: fadeInUp 0.5s ease-out 0.3s both;
 }
 
-.login-error {
+.citizen-login-error {
   background: hsl(0, 80%, 95%);
   color: hsl(0, 60%, 40%);
   padding: 0.75rem 1rem;
@@ -109,16 +109,14 @@ body.dark-mode .login-header {
   animation: fadeInUp 0.3s ease-out;
 }
 
-body.dark-mode .login-error {
+body.dark-mode .citizen-login-error {
   background: hsl(0, 40%, 18%);
   color: hsl(0, 60%, 65%);
 }
 
-.login-field {
-  margin-bottom: 1.25rem;
-}
+.citizen-login-field { margin-bottom: 1.25rem; }
 
-.login-field label {
+.citizen-login-field label {
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
@@ -126,9 +124,11 @@ body.dark-mode .login-error {
   margin-bottom: 0.4rem;
 }
 
-body.dark-mode .login-field label { color: hsl(210, 20%, 65%); }
+body.dark-mode .citizen-login-field label { color: hsl(210, 20%, 65%); }
 
-.login-field input {
+.req { color: hsl(0, 70%, 50%); }
+
+.citizen-login-field input {
   width: 100%;
   padding: 0.75rem 1rem;
   border: 2px solid var(--border-input, hsl(214, 25%, 88%));
@@ -140,22 +140,31 @@ body.dark-mode .login-field label { color: hsl(210, 20%, 65%); }
   color: var(--text-primary, hsl(215, 50%, 23%));
 }
 
-body.dark-mode .login-field input {
+body.dark-mode .citizen-login-field input {
   background: hsl(220, 25%, 16%);
   border-color: hsl(220, 20%, 25%);
   color: hsl(210, 30%, 88%);
 }
 
-.login-field input:focus {
+.citizen-login-field input:focus {
   outline: none;
-  border-color: var(--accent-blue, hsl(210, 65%, 45%));
+  border-color: hsl(210, 65%, 45%);
   box-shadow: 0 0 0 3px hsla(210, 65%, 45%, 0.12);
 }
 
-.btn-login {
+.field-hint {
+  display: block;
+  font-size: 0.78rem;
+  color: hsl(215, 10%, 55%);
+  margin-top: 0.3rem;
+}
+
+body.dark-mode .field-hint { color: hsl(215, 15%, 50%); }
+
+.btn-citizen-login {
   width: 100%;
   padding: 0.85rem;
-  background: linear-gradient(135deg, hsl(215, 50%, 23%), hsl(210, 45%, 30%));
+  background: linear-gradient(135deg, hsl(210, 50%, 30%), hsl(210, 55%, 38%));
   color: hsl(0, 0%, 100%);
   border: none;
   border-radius: 8px;
@@ -165,16 +174,16 @@ body.dark-mode .login-field input {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.btn-login:hover {
+.btn-citizen-login:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px hsla(215, 50%, 23%, 0.3);
+  box-shadow: 0 6px 20px hsla(210, 50%, 30%, 0.3);
 }
 
-body.dark-mode .btn-login {
+body.dark-mode .btn-citizen-login {
   background: linear-gradient(135deg, hsl(210, 60%, 35%), hsl(210, 50%, 42%));
 }
 
-.login-demo-note {
+.citizen-demo-note {
   margin-top: 1.25rem;
   padding: 0.75rem;
   background: hsl(210, 70%, 95%);
@@ -185,19 +194,19 @@ body.dark-mode .btn-login {
   border: 1px solid hsl(210, 60%, 88%);
 }
 
-body.dark-mode .login-demo-note {
+body.dark-mode .citizen-demo-note {
   background: hsl(210, 40%, 18%);
   color: hsl(210, 60%, 60%);
   border-color: hsl(210, 30%, 25%);
 }
 
-.login-footer { padding: 1rem 2rem 1.5rem; text-align: center; }
+.citizen-login-footer { padding: 1rem 2rem 1.5rem; text-align: center; }
 
-.login-footer a {
+.citizen-login-footer a {
   color: var(--text-muted, hsl(215, 10%, 55%));
   text-decoration: none;
   font-size: 0.875rem;
   transition: color 0.2s;
 }
 
-.login-footer a:hover { color: var(--accent-blue, hsl(210, 65%, 45%)); }
+.citizen-login-footer a:hover { color: hsl(210, 65%, 45%); }
