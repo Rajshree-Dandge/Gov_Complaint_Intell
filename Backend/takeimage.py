@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware  # Middleware to allow fronte
 import sqlite3  # Python's built-in database to store complaint information
 import os  # Library to manage folders and file paths on the computer
 from detective import run_ai_detection  # Importing the AI detection function (Roboflow)
-from brain import prioritize_complaint  # Importing the categorization and priority logic
+from priortize import prioritize_complaint  # Importing the categorization and priority logic
 
 # ---2.creating app object-----
 app = FastAPI()  # Creating the FastAPI app object to handle incoming requests
@@ -32,6 +32,8 @@ def init_db():  # Function to set up the database
                    language TEXT,
                    text_desc TEXT,
                    location TEXT,
+                   latitude REAL,
+                   longitude REAL,
                    ward_zone TEXT,
                    image_path TEXT,
                    status TEXT DEFAULT 'pending',
@@ -57,6 +59,8 @@ async def submit_complaint(  # Main function to handle the complaint submission
     language: str = Form(...),  # Getting the language selection from form data
     description: str = Form(...),  # Getting the complaint text from form data
     location: str = Form(...),  # Getting the location from form data
+    latitude: float = Form(...),  # NEW: Expecting float from frontend
+    longitude: float = Form(...), # NEW: Expecting float from frontend
     ward_zone: str = Form(...),  # Getting the ward or zone info from form data
     file: UploadFile = File(...)  # Getting the uploaded image file
 ):
@@ -65,6 +69,7 @@ async def submit_complaint(  # Main function to handle the complaint submission
     ai_priority = "low"  # Default priority level
     ai_cat = "General"  # Default category
     ai_conf = 0.0  # Default AI confidence score
+    final_lat, final_lon = latitude, longitude  # Default latitude and longitude values
     
     try:  # Starting a safe block to handle potential errors
         # --step1. save image locally---
@@ -76,15 +81,19 @@ async def submit_complaint(  # Main function to handle the complaint submission
         # --step2. AI Process (Nested Try so if AI fails, DB storage still happens)---
         try:  # Try to run the AI detection
             ai_result = run_ai_detection(file_loc)  # Send image to the detective script
-            logic_result = prioritize_complaint(description, ai_result)  # Get priority from brain script
+            logic_result = prioritize_complaint(description, ai_result,location)  # Get priority from brain script
             
             # Update variables based on AI results
             ai_status = "verified" if ai_result.get("detected") else "rejected"  # Set status based on detection
             ai_priority = logic_result.get("priority", "low")  # Get priority from AI logic
             ai_cat = logic_result.get("category", "Uncategorized")  # Get category from AI logic
             ai_conf = ai_result.get("confidence", 0.0)  # Get the confidence score from AI
+            # Use geocoded results if frontend coordinates are 0 or missing
+            if not final_lat:
+                final_lat = logic_result.get("latitude")
+                final_lon = logic_result.get("longitude")
         except Exception as ai_err:  # If AI script fails for any reason
-            print(f"AI Error: {ai_err}")  # Log the error in the console but don't stop the code
+            print(f"AI/GEO Error: {ai_err}")  # Log the error in the console but don't stop the code
 
         # --step3. SAVE TO DATABASE (Always runs even if AI verification fails)---
         conn = sqlite3.connect("grievance.db")  # Connect to the database
@@ -92,12 +101,12 @@ async def submit_complaint(  # Main function to handle the complaint submission
         cursor.execute('''
             INSERT INTO complaints (
                 full_name, phone_number, language, 
-                text_desc, location, ward_zone, image_path, 
+                text_desc, location, latitude, longitude, ward_zone, image_path, 
                 status, priority, ai_category, ai_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (
                 full_name, phone_number, language,
-                description, location, ward_zone, file_loc,
+                description, location, final_lat, final_lon, ward_zone, file_loc,
                 ai_status, ai_priority, ai_cat, ai_conf
             )
         )  # Insert all user data and AI results into the table
@@ -106,8 +115,9 @@ async def submit_complaint(  # Main function to handle the complaint submission
 
         # --step4. Return final response to frontend---
         return {
-            "status": ai_status,  # Send back the AI status (verified/rejected/pending)
-            "message": "Complaint recorded successfully.",  # Success message
+            "status":"success" ,  # Send back the AI status (verified/rejected/pending)
+            "ai_status": ai_status,  # Include the AI verification status in the response
+            "message": "Complaint recorded with exact coordinates..",  # Success message
             "image_saved_at": file_loc  # Path where the image was stored
         }
 
@@ -116,3 +126,7 @@ async def submit_complaint(  # Main function to handle the complaint submission
             "status": "error",  # Return error status
             "message": str(e)  # Return the specific error message to the frontend
         }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

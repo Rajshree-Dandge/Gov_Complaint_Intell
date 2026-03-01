@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './CitizenComplaint.css';
@@ -29,11 +29,50 @@ export default function CitizenComplaint() {
     ward: '',
     language: 'en',
   });
+
+  const [coords, setCoords] = useState({ latitude: null, longitude: null });
+  const [showModal, setShowModal] = useState(false); 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // --- LOCATION LOGIC ---
+  const requestLocation = () => {
+    const geoOptions = {
+      enableHighAccuracy: true,
+      timeout: 8000,
+      maximumAge: 0
+    };
+
+    if ("geolocation" in navigator) {
+      // 1. This triggers the native browser prompt (near the search bar)
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          // If allowed
+          setCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+          setShowModal(false); 
+        },
+        (error) => {
+          // 2. If blocked/denied, show the custom dark modal
+          console.error("Browser location blocked or failed.");
+          setShowModal(true); 
+        },
+        geoOptions
+      );
+    } else {
+      alert("Geolocation is not supported by this browser.");
+    }
+  };
+
+  // Trigger browser prompt as soon as the user lands on the page
+  useEffect(() => {
+    requestLocation();
+  }, []);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -55,22 +94,21 @@ export default function CitizenComplaint() {
     if (!form.description.trim()) newErrors.description = 'Description is required';
     if (!form.location.trim()) newErrors.location = 'Location is required';
     if (!imageFile) newErrors.image = 'Photo evidence is required';
+    if (!coords.latitude) newErrors.geo = "Exact GPS location is mandatory.";
     return newErrors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // 1. Run Validation
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      // Re-show mandatory modal if they try to submit without location
+      if (!coords.latitude) setShowModal(true);
       return;
     }
 
     setLoading(true);
-
-    // 2. Package the data
     const formData = new FormData();
     formData.append("full_name", form.citizenName);
     formData.append("phone_number", form.phone);
@@ -78,21 +116,18 @@ export default function CitizenComplaint() {
     formData.append("description", form.description);
     formData.append("location", form.location);
     formData.append("ward_zone", form.ward);
-    formData.append("file", imageFile); // CRITICAL: Added the file!
+    formData.append("file", imageFile);
+    formData.append("latitude", coords.latitude);
+    formData.append("longitude", coords.longitude);
 
     try {
-      const res = await axios.post("http://127.0.0.1:8000/submit-complaint", formData, {
+      const res = await axios.post("http://192.168.0.100:8000/submit-complaint", formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-
-      if (res.data.status === "success") {
-        setSubmitted(true);
-      } else {
-        alert("Verification Failed: " + res.data.message);
-      }
+      if (res.data.status === "success") setSubmitted(true);
+      else alert("Verification Failed: " + res.data.message);
     } catch (err) {
-      console.error("DEBUG ERROR:", err);
-      alert("Submission error. Make sure the backend is running on port 8000.");
+      alert("Submission error. Ensure backend is running.");
     } finally {
       setLoading(false);
     }
@@ -103,11 +138,8 @@ export default function CitizenComplaint() {
       <div className="citizen-page">
         <div className="success-card">
           <div className="success-icon">✓</div>
-          <h2>Complaint Submitted Successfully!</h2>
-          <p>Your grievance has been registered and verified by AI.</p>
-          <button className="btn-primary" onClick={() => window.location.reload()}>
-            Submit Another
-          </button>
+          <h2>Submitted Successfully!</h2>
+          <button className="btn-primary" onClick={() => window.location.reload()}>Submit Another</button>
         </div>
       </div>
     );
@@ -115,11 +147,33 @@ export default function CitizenComplaint() {
 
   return (
     <div className="citizen-page">
+      {/* CUSTOM DARK DIALOG BOX (Appears only after user denies browser notification) */}
+      {showModal && (
+        <div className="location-modal-overlay">
+          <div className="location-modal custom-dialog">
+            <div className="modal-header">
+               <span className="globe-icon">🌐</span>
+               <span className="url-text">192.168.0.100:8000</span>
+            </div>
+            <p>Location sharing is mandatory for government verification and improved performance. Please enable it in your browser settings.</p>
+            <div className="modal-actions">
+               <button className="btn-ok" onClick={() => setShowModal(false)}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="citizen-header">
         <div className="header-emblem">🏛️</div>
         <h1>Public Grievance Portal</h1>
-        <p>Register your complaint — we are listening</p>
+        <p>Your location is required for verification</p>
       </header>
+
+      {coords.latitude ? (
+        <div className="geo-alert-success">📍 GPS Location Captured Successfully</div>
+      ) : (
+        <div className="geo-alert-error">⚠️ Waiting for Location Access...</div>
+      )}
 
       <form className="complaint-form" onSubmit={handleSubmit}>
         <div className="form-section">
@@ -145,16 +199,14 @@ export default function CitizenComplaint() {
               {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
             </select>
           </div>
-
           <div className="form-group">
             <label>Description <span className="required">*</span></label>
             <textarea name="description" value={form.description} onChange={handleChange} rows={4} placeholder="Describe the issue..." />
             {errors.description && <span className="error">{errors.description}</span>}
           </div>
-
           <div className="form-row">
             <div className="form-group">
-              <label>Location <span className="required">*</span></label>
+              <label>Location (Area Name) <span className="required">*</span></label>
               <input name="location" value={form.location} onChange={handleChange} placeholder="Street/Area" />
               {errors.location && <span className="error">{errors.location}</span>}
             </div>
@@ -168,20 +220,22 @@ export default function CitizenComplaint() {
         <div className="form-section">
           <h3>Photo Evidence <span className="required">*</span></h3>
           <div className="upload-area" onClick={() => fileRef.current.click()}>
-            {imagePreview ? (
-              <img src={imagePreview} alt="Preview" className="image-preview" />
-            ) : (
-              <div className="upload-placeholder">
-                <span className="upload-icon">📷</span>
-                <p>Click to upload photo</p>
-              </div>
-            )}
+            {imagePreview ? <img src={imagePreview} className="image-preview" alt="preview" /> : <div className="upload-placeholder"><span className="upload-icon">📷</span><p>Click to upload photo</p></div>}
             <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} hidden />
           </div>
           {errors.image && <span className="error">{errors.image}</span>}
         </div>
 
-        <button type="submit" className="btn-primary btn-submit" disabled={loading}>
+        <button 
+          type="submit" 
+          className="btn-primary btn-submit" 
+          disabled={loading || !coords.latitude}
+          style={{ 
+            opacity: !coords.latitude ? 0.5 : 1, 
+            cursor: !coords.latitude ? 'not-allowed' : 'pointer',
+            backgroundColor: !coords.latitude ? '#ccc' : '' 
+          }}
+        >
           {loading ? "Processing..." : "Submit Complaint"}
         </button>
       </form>
