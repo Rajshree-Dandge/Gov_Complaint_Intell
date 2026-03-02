@@ -98,6 +98,8 @@ export default function CitizenComplaint() {
     return newErrors;
   };
 
+  const [pipelineStep, setPipelineStep] = useState(0); // 0 to 4
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const validationErrors = validate();
@@ -109,6 +111,8 @@ export default function CitizenComplaint() {
     }
 
     setLoading(true);
+    setPipelineStep(1); // START STAGE 1
+
     const formData = new FormData();
     formData.append("full_name", form.citizenName);
     formData.append("phone_number", form.phone);
@@ -121,17 +125,39 @@ export default function CitizenComplaint() {
     formData.append("longitude", coords.longitude);
 
     try {
-      const res = await axios.post("http://192.168.0.100:8000/submit-complaint", formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      if (res.data.status === "success") setSubmitted(true);
-      else alert("Verification Failed: " + res.data.message);
+      // Simulate pipeline progression for UX
+      setTimeout(() => setPipelineStep(2), 1500); // Stage 2: YOLO Scan
+      setTimeout(() => setPipelineStep(3), 3000); // Stage 3: Logic Brain
+
+      const res = await axios.post("http://192.168.0.100:8000/submit-complaint", formData);
+
+      if (res.data.status === "success") {
+        setPipelineStep(4); // Stage 4: Done
+        setTimeout(() => setSubmitted(true), 1000);
+      }
+      else{
+        alert("AI REJECTION: " + res.data.message);
+        setPipelineStep(0);
+      }
     } catch (err) {
-      alert("Submission error. Ensure backend is running.");
+      setPipelineStep(0);
+      alert("Backend Offline. Start Uvicorn on Port 8000");
     } finally {
       setLoading(false);
     }
   };
+
+  // 3. Add this visual inside your return (Above the button)
+  {
+    loading && (
+      <div className="pipeline-container">
+        <div className={`step ${pipelineStep >= 1 ? 'active' : ''}`}>📥 Storing in DB (Pending ID)</div>
+        <div className={`step ${pipelineStep >= 2 ? 'active' : ''}`}>👁️ YOLOv11 Scanning Image...</div>
+        <div className={`step ${pipelineStep >= 3 ? 'active' : ''}`}>🧠 Brain Categorizing Issue...</div>
+        <div className={`step ${pipelineStep >= 4 ? 'active' : ''}`}>✅ Verified & Assigned to Desk</div>
+      </div>
+    )
+  }
 
   if (submitted) {
     return (
@@ -220,7 +246,14 @@ export default function CitizenComplaint() {
         <div className="form-section">
           <h3>Photo Evidence <span className="required">*</span></h3>
           <div className="upload-area" onClick={() => fileRef.current.click()}>
-            {imagePreview ? <img src={imagePreview} className="image-preview" alt="preview" /> : <div className="upload-placeholder"><span className="upload-icon">📷</span><p>Click to upload photo</p></div>}
+            {imagePreview ?(
+              <img src={imagePreview} alt="Preview" className="image-preview" />
+            ) : (
+              <div className="upload-placeholder">
+                <span className="upload-icon">📷</span>
+                <p>Click to upload photo</p>
+              </div>
+            )}
             <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} hidden />
           </div>
           {errors.image && <span className="error">{errors.image}</span>}

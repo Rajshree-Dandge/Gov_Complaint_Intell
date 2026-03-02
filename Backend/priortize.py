@@ -41,6 +41,8 @@ def prioritize_complaint(description,ai_result,location_text):
         category = "Sanitization & Waste"
     elif any(word in desc_Lower for word in ["light", "electricity", "wire"]):
         category = "Electricity/Power"
+    elif any(word in desc_Lower for word in ["leak", "water", "pipe", "pipeline", "pani"]):
+        category = "Water Supply" # Targeted fix for your pipeline idea
 
     # STEP2--Urgency Check--
     # TextBlob  gives polarity [-1 to 1]
@@ -52,6 +54,7 @@ def prioritize_complaint(description,ai_result,location_text):
     for word in danger_words:
         if word in desc_Lower:
             urgency_score += 3
+    
 
     final_score = (ai_result.get('confidence', 0) * 5) + urgency_score
     priority = "High" if final_score > 7 else "Medium" if final_score > 4 else "Low"

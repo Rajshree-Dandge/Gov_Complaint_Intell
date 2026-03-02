@@ -64,64 +64,99 @@ async def submit_complaint(  # Main function to handle the complaint submission
     ward_zone: str = Form(...),  # Getting the ward or zone info from form data
     file: UploadFile = File(...)  # Getting the uploaded image file
 ):
-    # Pre-defining default values so we can save to DB even if AI fails
-    ai_status = "pending_review"  # Default status if AI code crashes
-    ai_priority = "low"  # Default priority level
-    ai_cat = "General"  # Default category
-    ai_conf = 0.0  # Default AI confidence score
-    final_lat, final_lon = latitude, longitude  # Default latitude and longitude values
+    # # Pre-defining default values so we can save to DB even if AI fails
+    # ai_status = "pending_review"  # Default status if AI code crashes
+    # ai_priority = "low"  # Default priority level
+    # ai_cat = "General"  # Default category
+    # ai_conf = 0.0  # Default AI confidence score
+    # final_lat, final_lon = latitude, longitude  # Default latitude and longitude values
     
     try:  # Starting a safe block to handle potential errors
         # --step1. save image locally---
         os.makedirs("uploads", exist_ok=True)  # Create 'uploads' folder if it doesn't exist
         file_loc = f"uploads/{file.filename}"  # Set the path for the saved image
+         # FIX: Added await for file reading
+        content = await file.read() # Read the uploaded file content asynchronously
         with open(file_loc, "wb+") as file_obj:  # Open a new file in binary write mode
-            file_obj.write(file.file.read())  # Write the uploaded image data into the file
+            file_obj.write(content)  # Write the uploaded image data into the file
+
+        # Create the record in DB immediately to get ID
+        conn = sqlite3.connect("grievance.db")
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO complaints (full_name, phone_number, language, text_desc, location, ward_zone, image_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            (full_name, phone_number, language, description, location, ward_zone, file_loc)
+        )
+        complaint_id = cursor.lastrowid # THIS IS YOUR PENDING ID
+        conn.commit()
 
         # --step2. AI Process (Nested Try so if AI fails, DB storage still happens)---
         try:  # Try to run the AI detection
             ai_result = run_ai_detection(file_loc)  # Send image to the detective script
-            logic_result = prioritize_complaint(description, ai_result,location)  # Get priority from brain script
+
+            if not ai_result["detected"]:
+                # If fake, update status and stop
+                cursor.execute("UPDATE complaints SET status='rejected' WHERE id=?", (complaint_id,))
+                conn.commit()
+                conn.close()
+                return {"status": "rejected", "message": "AI Verification Failed: Fake Image Detected."}
+
+            # Stage 3: The Brain (Categorization)
+            logic_result = prioritize_complaint(description, ai_result00)  # Get priority from brain script
             
-            # Update variables based on AI results
-            ai_status = "verified" if ai_result.get("detected") else "rejected"  # Set status based on detection
-            ai_priority = logic_result.get("priority", "low")  # Get priority from AI logic
-            ai_cat = logic_result.get("category", "Uncategorized")  # Get category from AI logic
-            ai_conf = ai_result.get("confidence", 0.0)  # Get the confidence score from AI
-            # Use geocoded results if frontend coordinates are 0 or missing
-            if not final_lat:
-                final_lat = logic_result.get("latitude")
-                final_lon = logic_result.get("longitude")
+            # STAGE 4: RETURN ENRICHED FILE
+            cursor.execute('''
+                UPDATE complaints 
+                SET status='verified', priority=?, ai_category=?, ai_score=?, text_desc=?, latitude=?, longitude=?
+                WHERE id=?''',
+                (logic_result["priority"], logic_result["category"], ai_result["confidence"], logic_result["eng_desc"], final_lat, final_lon, complaint_id)
+            )
+            conn.commit()
+            conn.close()
+
+            # # Update variables based on AI results
+            # ai_status = "verified" if ai_result.get("detected") else "rejected"  # Set status based on detection
+            # ai_priority = logic_result.get("priority", "low")  # Get priority from AI logic
+            # ai_cat = logic_result.get("category", "Uncategorized")  # Get category from AI logic
+            # ai_conf = ai_result.get("confidence", 0.0)  # Get the confidence score from AI
+            # # Use geocoded results if frontend coordinates are 0 or missing
+            # if not final_lat:
+            #     final_lat = logic_result.get("latitude")
+            #     final_lon = logic_result.get("longitude")
         except Exception as ai_err:  # If AI script fails for any reason
             print(f"AI/GEO Error: {ai_err}")  # Log the error in the console but don't stop the code
 
         # --step3. SAVE TO DATABASE (Always runs even if AI verification fails)---
-        conn = sqlite3.connect("grievance.db")  # Connect to the database
-        cursor = conn.cursor()  # Create a database cursor
-        cursor.execute('''
-            INSERT INTO complaints (
-                full_name, phone_number, language, 
-                text_desc, location, latitude, longitude, ward_zone, image_path, 
-                status, priority, ai_category, ai_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (
-                full_name, phone_number, language,
-                description, location, final_lat, final_lon, ward_zone, file_loc,
-                ai_status, ai_priority, ai_cat, ai_conf
-            )
-        )  # Insert all user data and AI results into the table
-        conn.commit()  # Save the record permanently in the DB
-        conn.close()  # Close the connection
+        # conn = sqlite3.connect("grievance.db")  # Connect to the database
+        # cursor = conn.cursor()  # Create a database cursor
+        # cursor.execute('''
+        #     INSERT INTO complaints (
+        #         full_name, phone_number, language, 
+        #         text_desc, location, latitude, longitude, ward_zone, image_path, 
+        #         status, priority, ai_category, ai_score
+        #     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        #     (
+        #         full_name, phone_number, language,
+        #         description, location, final_lat, final_lon, ward_zone, file_loc,
+        #         ai_status, ai_priority, ai_cat, ai_conf
+        #     )
+        # )  # Insert all user data and AI results into the table
+        # complaint_id = cursor.lastrowid # THIS IS YOUR PENDING ID
+        # conn.commit()  # Save the record permanently in the DB
+        # conn.close()  # Close the connection
 
         # --step4. Return final response to frontend---
         return {
-            "status":"success" ,  # Send back the AI status (verified/rejected/pending)
-            "ai_status": ai_status,  # Include the AI verification status in the response
-            "message": "Complaint recorded with exact coordinates..",  # Success message
-            "image_saved_at": file_loc  # Path where the image was stored
+            "status": "success",
+            "id": complaint_id,
+            "category": logic_result["category"],
+            "priority": logic_result["priority"],
+            "message": f"Verified! Assigned to {logic_result['category']} - Desk 1"
         }
 
     except Exception as e:  # Handling any major errors (like database locked)
+        print(f"Server Error: {e}")  # Log the error for debugging purposes
         return {
             "status": "error",  # Return error status
             "message": str(e)  # Return the specific error message to the frontend
