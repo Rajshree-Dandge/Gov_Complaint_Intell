@@ -11,7 +11,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,8 +52,8 @@ async def submit_complaint(
     language: str = Form(...),
     description: str = Form(...),
     location: str = Form(...),
-    latitude: float = Form(...),
-    longitude: float = Form(...),
+    latitude: float = Form(0.0),
+    longitude: float = Form(0.0),
     ward_zone: str = Form(...),
     file: UploadFile = File(...)
 ):
@@ -147,4 +147,4 @@ async def submit_complaint(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
