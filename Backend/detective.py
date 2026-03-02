@@ -1,4 +1,4 @@
-detective.py
+
 
 # --- 1. IMPORTING THE NECESSARY LIBRARY ---
 # Importing the Roboflow SDK to communicate with the cloud-based AI model
