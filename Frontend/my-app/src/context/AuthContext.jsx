@@ -1,52 +1,120 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../integrations/supabase/client';
+import { lovable } from '../integrations/lovable';
 
 const AuthContext = createContext();
 
-const DEMO_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123',
-};
-
 export function AuthProvider({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isCitizenAuthenticated, setIsCitizenAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const login = (username, password) => {
-    if (username === DEMO_CREDENTIALS.username && password === DEMO_CREDENTIALS.password) {
-      setIsAuthenticated(true);
-      setUser({ username, role: 'Government Official' });
-      setError('');
-      return true;
-    }
-    setError('Invalid username or password');
-    return false;
-  };
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        // Fetch profile with setTimeout to avoid deadlock
+        setTimeout(async () => {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single();
+          setProfile(data);
+          setLoading(false);
+        }, 0);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+    });
 
-  const citizenLogin = (name, identityNumber, phone) => {
-    if (!name.trim() || !identityNumber.trim()) {
-      setError('Name and Identity Number are required');
-      return false;
-    }
-    if (identityNumber.replace(/\s/g, '').length < 10) {
-      setError('Please enter a valid identity number (minimum 10 digits)');
-      return false;
-    }
-    setIsCitizenAuthenticated(true);
-    setUser({ name, identityNumber, phone, role: 'Citizen' });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (!session) setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const register = async (email, password, name, phone, role = 'citizen') => {
     setError('');
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: { name, phone, role },
+      },
+    });
+    if (signUpError) {
+      setError(signUpError.message);
+      return false;
+    }
     return true;
   };
 
-  const logout = () => {
-    setIsAuthenticated(false);
-    setIsCitizenAuthenticated(false);
-    setUser(null);
+  const login = async (email, password) => {
+    setError('');
+    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+    if (loginError) {
+      setError(loginError.message);
+      return false;
+    }
+    return true;
   };
 
+  const signInWithGoogle = async () => {
+    setError('');
+    const result = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: window.location.origin,
+    });
+    if (result?.error) {
+      setError(result.error.message || 'Google sign-in failed');
+      return false;
+    }
+    return true;
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setProfile(null);
+  };
+
+  const isAuthenticated = !!session;
+  const isGovernment = profile?.role === 'government';
+  const isCitizen = profile?.role === 'citizen';
+  const user = session?.user
+    ? {
+        id: session.user.id,
+        email: session.user.email,
+        name: profile?.name || session.user.user_metadata?.name || '',
+        phone: profile?.phone || '',
+        role: profile?.role || 'citizen',
+      }
+    : null;
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isCitizenAuthenticated, user, error, login, citizenLogin, logout }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user,
+        profile,
+        loading,
+        error,
+        isAuthenticated,
+        isGovernment,
+        isCitizen,
+        isCitizenAuthenticated: isAuthenticated && isCitizen,
+        register,
+        login,
+        signInWithGoogle,
+        logout,
+        setError,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

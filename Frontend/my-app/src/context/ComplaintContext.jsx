@@ -1,141 +1,130 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase } from '../integrations/supabase/client';
+import { useAuth } from './AuthContext';
 
 const ComplaintContext = createContext();
 
-const now = () => new Date().toISOString();
-
-const initialComplaints = [
-  {
-    id: 'GRV-001',
-    citizenName: 'Ramesh Kumar',
-    description: 'Large pothole on MG Road near sector 5 junction causing accidents daily.',
-    category: 'Roads',
-    location: 'MG Road, Sector 5',
-    ward: 'Ward 12',
-    status: 'Pending',
-    priority: 'High',
-    date: '2026-02-01',
-    imageUrl: null,
-    sentiment: 'Angry',
-    history: [{ status: 'Pending', timestamp: '2026-02-01T09:00:00Z', note: 'Complaint registered' }],
-  },
-  {
-    id: 'GRV-002',
-    citizenName: 'Sunita Devi',
-    description: 'Garbage not collected from colony for 5 days. Terrible smell spreading.',
-    category: 'Sanitation',
-    location: 'Green Park Colony',
-    ward: 'Ward 7',
-    status: 'In Progress',
-    priority: 'Medium',
-    date: '2026-02-03',
-    imageUrl: null,
-    sentiment: 'Frustrated',
-    history: [
-      { status: 'Pending', timestamp: '2026-02-03T10:00:00Z', note: 'Complaint registered' },
-      { status: 'In Progress', timestamp: '2026-02-05T14:30:00Z', note: 'Assigned to sanitation team' },
-    ],
-  },
-  {
-    id: 'GRV-003',
-    citizenName: 'Ahmed Khan',
-    description: 'Street light broken on Station Road. Very unsafe at night.',
-    category: 'Electrical',
-    location: 'Station Road',
-    ward: 'Ward 3',
-    status: 'Resolved',
-    priority: 'Medium',
-    date: '2026-01-20',
-    imageUrl: null,
-    sentiment: 'Concerned',
-    history: [
-      { status: 'Pending', timestamp: '2026-01-20T08:00:00Z', note: 'Complaint registered' },
-      { status: 'In Progress', timestamp: '2026-01-22T11:00:00Z', note: 'Electrician dispatched' },
-      { status: 'Resolved', timestamp: '2026-01-25T16:00:00Z', note: 'Street light replaced' },
-    ],
-  },
-  {
-    id: 'GRV-004',
-    citizenName: 'Priya Sharma',
-    description: 'Water pipeline leaking near main market. Water wastage for 3 days.',
-    category: 'Water Supply',
-    location: 'Main Market, Block A',
-    ward: 'Ward 12',
-    status: 'Pending',
-    priority: 'Urgent',
-    date: '2026-02-10',
-    imageUrl: null,
-    sentiment: 'Angry',
-    history: [{ status: 'Pending', timestamp: '2026-02-10T07:30:00Z', note: 'Complaint registered' }],
-  },
-  {
-    id: 'GRV-005',
-    citizenName: 'Vikram Singh',
-    description: 'Open drain overflowing near school. Health hazard for children.',
-    category: 'Drainage',
-    location: 'Govt. School Road, Sector 9',
-    ward: 'Ward 5',
-    status: 'Pending',
-    priority: 'Urgent',
-    date: '2026-02-11',
-    imageUrl: null,
-    sentiment: 'Angry',
-    history: [{ status: 'Pending', timestamp: '2026-02-11T06:45:00Z', note: 'Complaint registered' }],
-  },
-  {
-    id: 'GRV-006',
-    citizenName: 'Meena Patel',
-    description: 'Park bench broken and playground equipment rusted.',
-    category: 'Parks',
-    location: 'Central Park, Sector 2',
-    ward: 'Ward 1',
-    status: 'In Progress',
-    priority: 'Low',
-    date: '2026-01-28',
-    imageUrl: null,
-    sentiment: 'Neutral',
-    history: [
-      { status: 'Pending', timestamp: '2026-01-28T12:00:00Z', note: 'Complaint registered' },
-      { status: 'In Progress', timestamp: '2026-02-01T09:00:00Z', note: 'Maintenance crew assigned' },
-    ],
-  },
-];
-
 export function ComplaintProvider({ children }) {
-  const [complaints, setComplaints] = useState(initialComplaints);
+  const { session, isGovernment } = useAuth();
+  const [complaints, setComplaints] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const addComplaint = (complaint) => {
-    const newComplaint = {
-      ...complaint,
-      id: `GRV-${String(complaints.length + 1).padStart(3, '0')}`,
-      status: 'Pending',
-      priority: 'Medium',
-      date: new Date().toISOString().split('T')[0],
-      sentiment: 'Neutral',
-      history: [{ status: 'Pending', timestamp: now(), note: 'Complaint registered' }],
-    };
-    setComplaints((prev) => [newComplaint, ...prev]);
+  const fetchComplaints = useCallback(async () => {
+    if (!session) { setComplaints([]); return; }
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('complaints')
+      .select('*, complaint_history(*)')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setComplaints(data.map(c => ({
+        ...c,
+        id: c.complaint_number,
+        date: c.created_at?.split('T')[0],
+        citizenName: c.citizen_name || c.citizen_email,
+        imageUrl: c.image_url,
+        history: (c.complaint_history || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map(h => ({
+          status: h.status,
+          timestamp: h.created_at,
+          note: h.note,
+        })),
+      })));
+    }
+    setLoading(false);
+  }, [session]);
+
+  useEffect(() => {
+    fetchComplaints();
+  }, [fetchComplaints]);
+
+  const addComplaint = async (complaint) => {
+    if (!session) return null;
+    const seqRes = await supabase.rpc('nextval', { seq_name: 'complaint_number_seq' }).single();
+    const num = seqRes.data || Math.floor(Math.random() * 9999);
+    const complaintNumber = `GRV-${String(num).padStart(3, '0')}`;
+
+    const { data, error } = await supabase
+      .from('complaints')
+      .insert({
+        user_id: session.user.id,
+        complaint_number: complaintNumber,
+        citizen_email: session.user.email,
+        citizen_name: complaint.citizenName || session.user.user_metadata?.name || '',
+        phone: complaint.phone || '',
+        description: complaint.description,
+        category: complaint.category || 'Other',
+        location: complaint.location,
+        ward: complaint.ward || '',
+        language: complaint.language || 'en',
+        image_url: complaint.imageUrl || null,
+        status: 'Pending',
+        priority: 'Medium',
+        sentiment: 'Neutral',
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      // Insert initial history
+      await supabase.from('complaint_history').insert({
+        complaint_id: data.id,
+        status: 'Pending',
+        note: 'Complaint registered',
+      });
+
+      // Trigger email notification
+      try {
+        await supabase.functions.invoke('send-notification', {
+          body: { type: 'complaint_submitted', complaint_id: data.id },
+        });
+      } catch (e) { console.log('Email notification failed:', e); }
+
+      await fetchComplaints();
+      return data;
+    }
+    return null;
   };
 
-  const updateStatus = (id, newStatus) => {
-    setComplaints((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              status: newStatus,
-              history: [
-                ...(c.history || []),
-                { status: newStatus, timestamp: now(), note: `Status changed to ${newStatus}` },
-              ],
-            }
-          : c
-      )
-    );
+  const updateStatus = async (complaintNumber, newStatus) => {
+    const complaint = complaints.find(c => c.id === complaintNumber || c.complaint_number === complaintNumber);
+    if (!complaint) return;
+
+    const dbId = complaint.complaint_number === complaintNumber ? complaints.find(c => c.complaint_number === complaintNumber) : complaint;
+    const realId = dbId?.id !== complaintNumber ? complaint.id : null;
+
+    // Get the actual UUID
+    const { data: found } = await supabase
+      .from('complaints')
+      .select('id')
+      .eq('complaint_number', complaintNumber)
+      .single();
+
+    if (!found) return;
+
+    await supabase
+      .from('complaints')
+      .update({ status: newStatus })
+      .eq('id', found.id);
+
+    await supabase.from('complaint_history').insert({
+      complaint_id: found.id,
+      status: newStatus,
+      note: `Status changed to ${newStatus}`,
+    });
+
+    // Trigger email notification
+    try {
+      await supabase.functions.invoke('send-notification', {
+        body: { type: 'status_update', complaint_id: found.id, new_status: newStatus },
+      });
+    } catch (e) { console.log('Email notification failed:', e); }
+
+    await fetchComplaints();
   };
 
   return (
-    <ComplaintContext.Provider value={{ complaints, addComplaint, updateStatus }}>
+    <ComplaintContext.Provider value={{ complaints, loading, addComplaint, updateStatus, fetchComplaints }}>
       {children}
     </ComplaintContext.Provider>
   );
