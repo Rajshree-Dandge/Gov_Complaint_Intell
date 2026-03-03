@@ -11,7 +11,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -144,6 +144,43 @@ async def submit_complaint(
     except Exception as e:
         print(f"Server Error: {e}")
         return {"status": "error", "message": str(e)}
+    
+# govt login
+@app.post("/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    # TEMPORARY: Allow anyone to login for testing
+    print(f"Testing Login: User {username} is accessing the system.")
+    
+    return {
+        "status": "success", 
+        "message": "Testing Mode: Access Granted", 
+        "user": username
+    }
+
+# Route for Government Officials to view all complaints (for testing purposes)
+@app.get("/get-complaints")
+async def get_complaints():
+    try:
+        conn=sqlite3.connect("grievance.db")
+        conn.row_factory=sqlite3.Row
+        cursor=conn.cursor()
+
+        # fetch verified complaints sorted by severity score
+        cursor.execute(
+            '''
+            SELECT * FROM complaints
+            WHERE status='verified'
+            ORDER BY ai_score DESC
+    '''
+        )
+        rows=cursor.fetchall()
+        # convert rows to a list of dictionary for JSON
+        complaints=[dict(row) for row in rows]
+        conn.close()
+        return complaints
+
+    except Exception as e:
+        return {"status":"error","message":str(e)}
 
 if __name__ == "__main__":
     import uvicorn
