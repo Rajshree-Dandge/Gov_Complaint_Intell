@@ -165,34 +165,25 @@ from typing import Optional
 
 # Route for Government Officials to view complaints (Filtered by Category and Ward)
 @app.get("/get-complaints")
-async def get_complaints(category: Optional[str] = None, ward: Optional[str] = None):
+async def get_complaints(ward: str, category: str):
     try:
         conn = sqlite3.connect("grievance.db")
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Build the dynamic query based on provided filters
-        query = "SELECT * FROM complaints WHERE status='verified'"
-        params = []
+        # We use '%' to match parts of the word. 
+        # This makes "Sanitation & Waste" match "Sanitation"
+        search_term = f"%{category.split(' ')[0]}%" 
 
-        if category:
-            query += " AND ai_category = ?"
-            params.append(category)
+        cursor.execute('''
+            SELECT * FROM complaints 
+            WHERE ward_zone = ? AND ai_category LIKE ? AND status = 'verified'
+            ORDER BY ai_score DESC
+        ''', (ward, search_term))
         
-        if ward:
-            query += " AND ward_zone = ?"
-            params.append(ward)
-
-        query += " ORDER BY ai_score DESC"
-
-        cursor.execute(query, tuple(params))
-        rows = cursor.fetchall()
-        
-        # convert rows to a list of dictionaries for JSON
-        complaints = [dict(row) for row in rows]
+        complaints = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return complaints
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
