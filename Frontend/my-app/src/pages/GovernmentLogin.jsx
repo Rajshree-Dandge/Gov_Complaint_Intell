@@ -8,12 +8,17 @@ export default function GovernmentLogin() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [ward, setWard] = useState('Ward 1');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (login(username, password)) {
-      navigate('/dashboard');
-    }
+
+    // 1. Save EXACTLY what the user typed/selected
+    localStorage.setItem("gov_ward", ward);
+    localStorage.setItem("gov_user", username);
+
+    console.log("Saved Ward to Storage:", ward); // Check this in console
+    navigate('/gov-landing');
   };
 
   return (
@@ -48,6 +53,15 @@ export default function GovernmentLogin() {
               placeholder="Enter password"
               required
             />
+          </div>
+
+          <div className="login-field">
+            <label>Select Your Ward / Zone</label>
+            <select value={ward} onChange={(e) => setWard(e.target.value)}>
+              <option value="Ward 1">Ward 1 - South Hub</option>
+              <option value="Ward 2">Ward 2 - East Sector</option>
+              <option value="Ward 5">Ward 5 - MG Road Area</option>
+            </select>
           </div>
 
           <button type="submit" className="btn-login">Sign In</button>

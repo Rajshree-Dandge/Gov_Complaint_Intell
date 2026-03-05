@@ -144,42 +144,57 @@ async def submit_complaint(
         print(f"Server Error: {e}")
         return {"status": "error", "message": str(e)}
     
-# govt login
+# --- 5. GOVT LOGIN (TESTING) ---
 @app.post("/login")
-async def login(username: str = Form(...), password: str = Form(...)):
-    # TEMPORARY: Allow anyone to login for testing
-    print(f"Testing Login: User {username} is accessing the system.")
+async def login(
+    username: str = Form(...), 
+    password: str = Form(...),
+    ward: str = Form(...) # Now we take the ward during login for testing
+):
+    print(f"Testing Login: {username} accessing {ward}")
     
+    # Logic: Always return success for testing, but pass back the ward name
     return {
-        "status": "success", 
-        "message": "Testing Mode: Access Granted", 
-        "user": username
+        "status": "success",
+        "user": username,
+        "working_zone": ward, # This tells React which ward to load
+        "message": "Access Granted to " + ward
     }
 
-# Route for Government Officials to view all complaints (for testing purposes)
-@app.get("/get-complaints")
-async def get_complaints():
-    try:
-        conn=sqlite3.connect("grievance.db")
-        conn.row_factory=sqlite3.Row
-        cursor=conn.cursor()
+from typing import Optional
 
-        # fetch verified complaints sorted by severity score
-        cursor.execute(
-            '''
-            SELECT * FROM complaints
-            WHERE status='verified'
-            ORDER BY ai_score DESC
-    '''
-        )
-        rows=cursor.fetchall()
-        # convert rows to a list of dictionary for JSON
-        complaints=[dict(row) for row in rows]
+# Route for Government Officials to view complaints (Filtered by Category and Ward)
+@app.get("/get-complaints")
+async def get_complaints(category: Optional[str] = None, ward: Optional[str] = None):
+    try:
+        conn = sqlite3.connect("grievance.db")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Build the dynamic query based on provided filters
+        query = "SELECT * FROM complaints WHERE status='verified'"
+        params = []
+
+        if category:
+            query += " AND ai_category = ?"
+            params.append(category)
+        
+        if ward:
+            query += " AND ward_zone = ?"
+            params.append(ward)
+
+        query += " ORDER BY ai_score DESC"
+
+        cursor.execute(query, tuple(params))
+        rows = cursor.fetchall()
+        
+        # convert rows to a list of dictionaries for JSON
+        complaints = [dict(row) for row in rows]
         conn.close()
         return complaints
 
     except Exception as e:
-        return {"status":"error","message":str(e)}
+        return {"status": "error", "message": str(e)}
 
 # --- ROUTE TO GET CATEGORY COUNTS FOR A SPECIFIC WARD ---
 @app.get("/get-ward-stats")

@@ -12,6 +12,7 @@ import ReportPage from "./pages/ReportPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import CitizenProtectedRoute from "./components/CitizenProtectedRoute";
 import NotFound from "./pages/NotFound";
+import GovLanding from "./pages/GovernmentLanding";
 
 const App = () => (
   <ThemeProvider>
@@ -23,10 +24,13 @@ const App = () => (
             <Route path="/select-role" element={<RoleSelection />} />
             <Route path="/citizen-login" element={<CitizenLogin />} />
             <Route path="/login" element={<GovernmentLogin />} />
+            <Route path="/gov-landing" element={<GovLanding />} />
             <Route path="/citizen" element={<CitizenProtectedRoute><CitizenComplaint /></CitizenProtectedRoute>} />
-            <Route path="/dashboard" element={<GovernmentDashboard />} />
+            <Route path="/dashboard" element={<GovLanding />} />
+            <Route path="/dashboard/:category" element={<GovernmentDashboard />} />
             <Route path="/reports" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
+
           </Routes>
         </BrowserRouter>
       </ComplaintProvider>
