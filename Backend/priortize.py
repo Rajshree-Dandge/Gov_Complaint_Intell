@@ -35,7 +35,7 @@ def prioritize_complaint(description,ai_result,location_text):
 
     # --- 3. Categorization ---
     # Base Intensity from AI Visual confidence (0.0 to 2.0)
-    base_score = ai_result.get('confidence', 0) * 2
+    image_score = ai_result.get('confidence', 0) * 2
 
     # 1. KEYWORD WEIGHTS
     # Dangerous: Immediate threat to life (+7 points)
@@ -59,7 +59,7 @@ def prioritize_complaint(description,ai_result,location_text):
         level = "Neutral"
 
     # Final Severity Score (Max 10)
-    final_score = min(base_score + score_multiplier + 1, 10.0)
+    final_score = min(image_score + score_multiplier + 1, 10.0)
 
     return {
         "score": round(final_score, 1),

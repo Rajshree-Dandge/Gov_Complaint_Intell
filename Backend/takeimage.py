@@ -8,7 +8,6 @@ from priortize import prioritize_complaint  # Categorization & Logic
 
 # --- 2. APP SETUP ---
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -181,6 +180,33 @@ async def get_complaints():
 
     except Exception as e:
         return {"status":"error","message":str(e)}
+
+# --- ROUTE TO GET CATEGORY COUNTS FOR A SPECIFIC WARD ---
+@app.get("/get-ward-stats")
+async def get_ward_stats(ward: str):
+    try:
+        conn = sqlite3.connect("grievance.db")
+        cursor = conn.cursor()
+
+        # Logic: Count how many verified complaints exist in each category for this ward
+        cursor.execute('''
+            SELECT ai_category, COUNT(*) 
+            FROM complaints 
+            WHERE ward_zone = ? AND status = 'verified'
+            GROUP BY ai_category
+        ''', (ward,))
+        
+        results = cursor.fetchall()
+        # Convert to a simple dictionary: {"Roads": 5, "Garbage": 12...}
+        stats = {row[0]: row[1] for row in results}
+        
+        conn.close()
+        return {
+            "ward": ward,
+            "stats": stats
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
