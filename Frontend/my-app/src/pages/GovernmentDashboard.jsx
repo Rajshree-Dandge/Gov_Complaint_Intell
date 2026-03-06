@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import GrievanceMap from './Heatmap';
 import './GovernmentDashboard.css';
 
 export default function GovDashboard() {
@@ -9,6 +10,7 @@ export default function GovDashboard() {
   const [complaints, setComplaints] = useState([]);
   const [stats, setStats] = useState({ today: 0, remaining: 0, resolved: 0 });
   const [loading, setLoading] = useState(true);
+  const [clusters, setClusters] = useState([]);
 
   const officerWard = localStorage.getItem("gov_ward") || "Ward 5";
 
@@ -51,6 +53,23 @@ export default function GovDashboard() {
     // Future: axios.patch(`http://localhost:8000/resolve/${id}`)
   };
 
+  const fetchDashboardData = async () => {
+    try {
+      // Fetch both Table and Heatmap in parallel
+      const [tableRes, mapRes] = await Promise.all([
+        axios.get(`http://localhost:8000/get-complaints?ward=${officerWard}&category=${category}`),
+        axios.get(`http://localhost:8000/get-heatmap?ward=${officerWard}&category=${category}`)
+      ]);
+
+      setComplaints(tableRes.data);
+      setClusters(mapRes.data); // Data for the Bubbles
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+    }
+  };
+
   if (loading) return <div className="loader">Analyzing Department Data...</div>;
 
   return (
@@ -89,6 +108,12 @@ export default function GovDashboard() {
           <h2>{category} Intelligence Dashboard</h2>
           <p>Showing verified results for <strong>{officerWard}</strong></p>
         </header>
+
+        {/* --- THE MAP REFLECTOR --- */}
+          <section style={{ marginBottom: '30px' }}>
+            <h3 style={{color: '#1e293b', marginBottom: '10px'}}>📍 Severity Hotspots</h3>
+            <GrievanceMap clusters={clusters} />
+          </section>
 
         <div className="table-container">
           <table className="prio-table">

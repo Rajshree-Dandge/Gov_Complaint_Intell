@@ -14,6 +14,7 @@ import CitizenProtectedRoute from "./components/CitizenProtectedRoute";
 import NotFound from "./pages/NotFound";
 import GovLanding from "./pages/GovernmentLanding";
 
+
 const App = () => (
   <ThemeProvider>
     <AuthProvider>
