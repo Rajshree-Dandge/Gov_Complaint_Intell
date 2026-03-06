@@ -5,6 +5,7 @@ import sqlite3
 import os
 from detective import run_ai_detection  # AI Verification (Roboflow)
 from priortize import prioritize_complaint  # Categorization & Logic
+from clustering import get_clusters  # Clustering Logic
 
 # --- 2. APP SETUP ---
 app = FastAPI()
@@ -211,6 +212,28 @@ async def get_ward_stats(ward: str):
             "ward": ward,
             "stats": stats
         }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+@app.get("/get-heatmap")
+async def get_heatmap(ward: str, category: str):
+    try:
+        conn = sqlite3.connect("grievance.db")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # 1. Fetch complaints for this specific area and dept
+        cursor.execute('''
+            SELECT latitude, longitude, ai_score, ai_category 
+            FROM complaints 
+            WHERE ward_zone = ? AND ai_category LIKE ? AND status = 'verified'
+        ''', (ward, f"%{category}%"))
+        
+        complaints = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        # 2. Run DBSCAN logic to group them into bubbles
+        clusters = get_clusters(complaints)
+        return clusters
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
