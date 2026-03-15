@@ -34,36 +34,35 @@ def prioritize_complaint(description,ai_result,location_text):
         print(f"Geocoding Error: {e}")
 
     # --- 3. Categorization ---
-    category = "General"
-    if "pothole" in desc_Lower or ai_result.get('label') == 'pothole' or "road" in desc_Lower:
-        category = "Roads & Infrastructure"
-    elif any(word in desc_Lower for word in ["garbage", "waste", "gutter", "trash"]):
-        category = "Sanitization & Waste"
-    elif any(word in desc_Lower for word in ["light", "electricity", "wire"]):
-        category = "Electricity/Power"
-    elif any(word in desc_Lower for word in ["leak", "water", "pipe", "pipeline", "pani"]):
-        category = "Water Supply" # Targeted fix for your pipeline idea
+    # Base Intensity from AI Visual confidence (0.0 to 2.0)
+    image_score = ai_result.get('confidence', 0) * 2
 
-    # STEP2--Urgency Check--
-    # TextBlob  gives polarity [-1 to 1]
-    # negative polarity means user has given dangerous suitation
-    polarity=TextBlob(description)
-
-    urgency_score = 0
-    danger_words = ["danger", "urgent", "accident", "emergency", "immediate", "hazard"]
-    for word in danger_words:
-        if word in desc_Lower:
-            urgency_score += 3
+    # 1. KEYWORD WEIGHTS
+    # Dangerous: Immediate threat to life (+7 points)
+    dangerous_keywords = ["accident", "injury", "deadly", "hospital", "emergency", "shock", "falling"]
     
-
-    final_score = (ai_result.get('confidence', 0) * 5) + urgency_score
-    priority = "High" if final_score > 7 else "Medium" if final_score > 4 else "Low"
+    # Moderate: Operational failure, affecting traffic/daily life (+4 points)
+    moderate_keywords = ["bad", "problem", "dark", "smell", "waste", "stuck", "leakage"]
     
-    return{
-        "category":category,
-        "priority":priority,
-        "score":round(final_score,1),
-        "latitude": lat,
-        "longitude": lon
+    # Neutral: Minor aesthetic issue or routine maintenance (+1 point)
+    neutral_keywords = ["cleaning", "minor", "small", "notice", "request"]
+
+    score_multiplier = 0
+    if any(word in desc_Lower for word in dangerous_keywords):
+        score_multiplier = 7
+        level = "Dangerous"
+    elif any(word in desc_Lower for word in moderate_keywords):
+        score_multiplier = 4
+        level = "Moderate"
+    else:
+        score_multiplier = 1
+        level = "Neutral"
+
+    # Final Severity Score (Max 10)
+    final_score = min(image_score + score_multiplier + 1, 10.0)
+
+    return {
+        "score": round(final_score, 1),
+        "priority": level, # This is our new 3-level label
+        "category": ai_result.get('label', 'General')
     }
-    

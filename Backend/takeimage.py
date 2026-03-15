@@ -5,10 +5,10 @@ import sqlite3
 import os
 from detective import run_ai_detection  # AI Verification (Roboflow)
 from priortize import prioritize_complaint  # Categorization & Logic
+from clustering import get_clusters  # Clustering Logic
 
 # --- 2. APP SETUP ---
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -52,8 +52,8 @@ async def submit_complaint(
     language: str = Form(...),
     description: str = Form(...),
     location: str = Form(...),
-    latitude: float = Form(...),
-    longitude: float = Form(...),
+    latitude: float = Form(0.0),
+    longitude: float = Form(0.0),
     ward_zone: str = Form(...),
     file: UploadFile = File(...)
 ):
@@ -144,7 +144,99 @@ async def submit_complaint(
     except Exception as e:
         print(f"Server Error: {e}")
         return {"status": "error", "message": str(e)}
+    
+# --- 5. GOVT LOGIN (TESTING) ---
+@app.post("/login")
+async def login(
+    username: str = Form(...), 
+    password: str = Form(...),
+    ward: str = Form(...) # Now we take the ward during login for testing
+):
+    print(f"Testing Login: {username} accessing {ward}")
+    
+    # Logic: Always return success for testing, but pass back the ward name
+    return {
+        "status": "success",
+        "user": username,
+        "working_zone": ward, # This tells React which ward to load
+        "message": "Access Granted to " + ward
+    }
+
+from typing import Optional
+
+# Route for Government Officials to view complaints (Filtered by Category and Ward)
+@app.get("/get-complaints")
+async def get_complaints(ward: str, category: str):
+    try:
+        conn = sqlite3.connect("grievance.db")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # We use '%' to match parts of the word. 
+        # This makes "Sanitation & Waste" match "Sanitation"
+        search_term = f"%{category.split(' ')[0]}%" 
+
+        cursor.execute('''
+            SELECT * FROM complaints 
+            WHERE ward_zone = ? AND ai_category LIKE ? AND status = 'verified'
+            ORDER BY ai_score DESC
+        ''', (ward, search_term))
+        
+        complaints = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return complaints
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# --- ROUTE TO GET CATEGORY COUNTS FOR A SPECIFIC WARD ---
+@app.get("/get-ward-stats")
+async def get_ward_stats(ward: str):
+    try:
+        conn = sqlite3.connect("grievance.db")
+        cursor = conn.cursor()
+
+        # Logic: Count how many verified complaints exist in each category for this ward
+        cursor.execute('''
+            SELECT ai_category, COUNT(*) 
+            FROM complaints 
+            WHERE ward_zone = ? AND status = 'verified'
+            GROUP BY ai_category
+        ''', (ward,))
+        
+        results = cursor.fetchall()
+        # Convert to a simple dictionary: {"Roads": 5, "Garbage": 12...}
+        stats = {row[0]: row[1] for row in results}
+        
+        conn.close()
+        return {
+            "ward": ward,
+            "stats": stats
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+@app.get("/get-heatmap")
+async def get_heatmap(ward: str, category: str):
+    try:
+        conn = sqlite3.connect("grievance.db")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # 1. Fetch complaints for this specific area and dept
+        cursor.execute('''
+            SELECT latitude, longitude, ai_score, ai_category 
+            FROM complaints 
+            WHERE ward_zone = ? AND ai_category LIKE ? AND status = 'verified'
+        ''', (ward, f"%{category}%"))
+        
+        complaints = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        # 2. Run DBSCAN logic to group them into bubbles
+        clusters = get_clusters(complaints)
+        return clusters
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

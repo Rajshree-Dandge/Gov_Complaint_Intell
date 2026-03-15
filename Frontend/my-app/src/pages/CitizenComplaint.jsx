@@ -32,7 +32,7 @@ export default function CitizenComplaint() {
   });
 
   const [coords, setCoords] = useState({ latitude: null, longitude: null });
-  const [showModal, setShowModal] = useState(false); 
+  const [showModal, setShowModal] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
@@ -56,12 +56,12 @@ export default function CitizenComplaint() {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
-          setShowModal(false); 
+          setShowModal(false);
         },
         (error) => {
           // 2. If blocked/denied, show the custom dark modal
           console.error("Browser location blocked or failed.");
-          setShowModal(true); 
+          setShowModal(true);
         },
         geoOptions
       );
@@ -130,14 +130,14 @@ export default function CitizenComplaint() {
       setTimeout(() => setPipelineStep(2), 1500); // Stage 2: YOLO Scan
       setTimeout(() => setPipelineStep(3), 3000); // Stage 3: Logic Brain
 
-      const res = await axios.post("http://192.168.0.100:8000/submit-complaint", formData);
+      const res = await axios.post("http://localhost:8000/submit-complaint", formData);
 
       if (res.data.status === "success") {
         setPipelineStep(4); // Stage 4: Done
         setTimeout(() => setSubmitted(true), 1000);
       }
-      else{
-        alert("AI REJECTION: " + res.data.message);
+      else {
+        alert("AI Verification Failed: Please upload a valid photo.");
         setPipelineStep(0);
       }
     } catch (err) {
@@ -179,12 +179,12 @@ export default function CitizenComplaint() {
         <div className="location-modal-overlay">
           <div className="location-modal custom-dialog">
             <div className="modal-header">
-               <span className="globe-icon">🌐</span>
-               <span className="url-text">192.168.0.100:8000</span>
+              <span className="globe-icon">🌐</span>
+              <span className="url-text">localhost:8000</span>
             </div>
             <p>Location sharing is mandatory for government verification and improved performance. Please enable it in your browser settings.</p>
             <div className="modal-actions">
-               <button className="btn-ok" onClick={() => setShowModal(false)}>OK</button>
+              <button className="btn-ok" onClick={() => setShowModal(false)}>OK</button>
             </div>
           </div>
         </div>
@@ -247,7 +247,7 @@ export default function CitizenComplaint() {
         <div className="form-section">
           <h3>Photo Evidence <span className="required">*</span></h3>
           <div className="upload-area" onClick={() => fileRef.current.click()}>
-            {imagePreview ?(
+            {imagePreview ? (
               <img src={imagePreview} alt="Preview" className="image-preview" />
             ) : (
               <div className="upload-placeholder">
@@ -260,14 +260,14 @@ export default function CitizenComplaint() {
           {errors.image && <span className="error">{errors.image}</span>}
         </div>
 
-        <button 
-          type="submit" 
-          className="btn-primary btn-submit" 
+        <button
+          type="submit"
+          className="btn-primary btn-submit"
           disabled={loading || !coords.latitude}
-          style={{ 
-            opacity: !coords.latitude ? 0.5 : 1, 
+          style={{
+            opacity: !coords.latitude ? 0.5 : 1,
             cursor: !coords.latitude ? 'not-allowed' : 'pointer',
-            backgroundColor: !coords.latitude ? '#ccc' : '' 
+            backgroundColor: !coords.latitude ? '#ccc' : ''
           }}
         >
           {loading ? "Processing..." : "Submit Complaint"}
