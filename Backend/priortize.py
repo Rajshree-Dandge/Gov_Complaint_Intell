@@ -61,8 +61,21 @@ def prioritize_complaint(description,ai_result,location_text):
     # Final Severity Score (Max 10)
     final_score = min(image_score + score_multiplier + 1, 10.0)
 
+    # Standardize categories to match Frontend Keys
+    ai_label = ai_result.get('label', 'General').lower()
+    if any(k in ai_label for k in ["pothole", "road", "crack", "asphalt", "bridge"]):
+        final_category = "Roads & Infrastructure"
+    elif any(k in ai_label for k in ["water", "leak", "pipe", "flood", "sewage"]):
+        final_category = "Water Supply"
+    elif any(k in ai_label for k in ["electric", "power", "light", "wire", "transformer"]):
+        final_category = "Electricity/Power"
+    elif any(k in ai_label for k in ["garbage", "trash", "waste", "bin", "litter", "sanit"]):
+        final_category = "Sanitation & Waste"
+    else:
+        final_category = "General"
+
     return {
         "score": round(final_score, 1),
         "priority": level, # This is our new 3-level label
-        "category": ai_result.get('label', 'General')
+        "category": final_category
     }

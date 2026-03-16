@@ -1,11 +1,13 @@
 # --- 1. IMPORTING LIBRARIES ---
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import sqlite3
+import uvicorn
 import os
 from detective import run_ai_detection  # AI Verification (Roboflow)
 from priortize import prioritize_complaint  # Categorization & Logic
-from clustering import get_clusters  # Clustering Logic
+from Clustering import get_clusters  # Clustering Logic
 
 # --- 2. APP SETUP ---
 app = FastAPI()
@@ -16,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve the uploads folder so React can show the images
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- 3. DATABASE INITIALIZATION ---
 def init_db():
@@ -222,11 +227,14 @@ async def get_heatmap(ward: str, category: str):
         cursor = conn.cursor()
 
         # 1. Fetch complaints for this specific area and dept
+        # We split the category for fuzzy matching (like in get-complaints)
+        search_term = f"%{category.split(' ')[0]}%"
+
         cursor.execute('''
             SELECT latitude, longitude, ai_score, ai_category 
             FROM complaints 
             WHERE ward_zone = ? AND ai_category LIKE ? AND status = 'verified'
-        ''', (ward, f"%{category}%"))
+        ''', (ward, search_term))
         
         complaints = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -238,5 +246,4 @@ async def get_heatmap(ward: str, category: str):
         return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -16,16 +16,18 @@ export default function GovLanding() {
   useEffect(() => {
     const fetchWardStats = async () => {
       try {
-        const res = await axios.get(`http://localhost:8000/get-ward-stats?ward=${officerWard}`);
+        const res = await axios.get(`http://127.0.0.1:8000/get-ward-stats?ward=${officerWard}`);
         // Backend returns: { "stats": { "Roads": 5, "Garbage": 2... } }
-        setStats(res.data.stats);
-        setLoading(false);
+        setStats(res.data.stats || {});
       } catch (err) {
         console.error("Error fetching ward stats:", err);
+      } finally {
         setLoading(false);
       }
     };
-    fetchWardStats();
+    if (officerWard !== "Loading...") {
+      fetchWardStats();
+    }
   }, [officerWard]);
 
   // 3. Definition of the 4 Cards (Matching your sketch)

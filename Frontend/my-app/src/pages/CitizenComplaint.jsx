@@ -130,7 +130,7 @@ export default function CitizenComplaint() {
       setTimeout(() => setPipelineStep(2), 1500); // Stage 2: YOLO Scan
       setTimeout(() => setPipelineStep(3), 3000); // Stage 3: Logic Brain
 
-      const res = await axios.post("http://localhost:8000/submit-complaint", formData);
+      const res = await axios.post("http://127.0.0.1:8000/submit-complaint", formData);
 
       if (res.data.status === "success") {
         setPipelineStep(4); // Stage 4: Done
@@ -180,7 +180,7 @@ export default function CitizenComplaint() {
           <div className="location-modal custom-dialog">
             <div className="modal-header">
               <span className="globe-icon">🌐</span>
-              <span className="url-text">localhost:8000</span>
+              <span className="url-text">127.0.0.1:8000</span>
             </div>
             <p>Location sharing is mandatory for government verification and improved performance. Please enable it in your browser settings.</p>
             <div className="modal-actions">
