@@ -1,9 +1,10 @@
 # --- 1. IMPORTING LIBRARIES ---
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile,BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import sqlite3
 import uvicorn
+import time
 import os
 from detective import run_ai_detection  # AI Verification (Roboflow)
 from priortize import prioritize_complaint  # Categorization & Logic
@@ -18,6 +19,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+
+
 
 # Serve the uploads folder so React can show the images
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -52,6 +57,7 @@ init_db()
 # --- 4. MAIN ROUTE ---
 @app.post("/submit-complaint")
 async def submit_complaint(
+    background_tasks:BackgroundTasks,
     full_name: str = Form(...),
     phone_number: str = Form(...),
     language: str = Form(...),
@@ -89,67 +95,77 @@ async def submit_complaint(
         )
         complaint_id = cursor.lastrowid 
         conn.commit()
-
-        # STEP 3: AI VERIFICATION (The Gatekeeper)
-        ai_result = run_ai_detection(file_loc)
-
-        if not ai_result.get("detected"):
-            # --- INCORRECT IMAGE LOGIC ---
-            cursor.execute("UPDATE complaints SET status='rejected' WHERE id=?", (complaint_id,))
-            conn.commit()
-            conn.close()
-            # Return specific "rejected" status so frontend can show alert
-            return {
-                "status": "rejected", 
-                "message": "AI Verification Failed: Incorrect or invalid image detected. Please upload a clear photo of the issue."
-            }
-
-        # STEP 4: PROCEED FURTHER (Image is Correct)
-        # Only reached if ai_result["detected"] is True
-        logic_result = prioritize_complaint(description, ai_result, location)
-        
-        # Determine final coordinates (GPS vs Geocoding)
-        if not final_lat or final_lat == 0:
-            final_lat = logic_result.get("latitude", latitude)
-            final_lon = logic_result.get("longitude", longitude)
-
-        # STEP 5: FINAL UPDATE (Enrich the data)
-        cursor.execute('''
-            UPDATE complaints SET 
-                status='verified', 
-                priority=?, 
-                ai_category=?, 
-                ai_score=?, 
-                text_desc=?, 
-                latitude=?, 
-                longitude=?
-            WHERE id=?''',
-            (
-                logic_result.get("priority", "low"), 
-                logic_result.get("category", "General"), 
-                ai_result.get("confidence", 0.0), 
-                logic_result.get("eng_desc", description), 
-                final_lat, 
-                final_lon, 
-                complaint_id
-            )
-        )
-        conn.commit()
         conn.close()
+
+        # STEP 3: run the back task
+        background_tasks.add_task(
+            run_task_back, 
+            complaint_id, file_loc, description, location
+        )
+       
 
         # STEP 6: SUCCESS RESPONSE
         return {
             "status": "success",
             "id": complaint_id,
-            "category": logic_result.get("category"),
-            "priority": logic_result.get("priority"),
-            "message": f"Verified! Assigned to {logic_result.get('category')} - Desk 1"
+            "message": "Complaint received. AI verification is running in background. You will receive a notification shortly."
         }
 
     except Exception as e:
         print(f"Server Error: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": str(e)
+        }
     
+
+
+
+# adding background task to achieve performance
+async def run_task_back(complaint_id:int,file_loc:str,description:str,location:str):
+    try:
+        ai_result=run_ai_detection(file_loc)
+        if not ai_result.get("detected"):
+            # connection
+            conn=sqlite3.connect("grievance.db")
+            # assisstant
+            cursor=conn.cursor()
+            # execute
+            cursor.execute("UPDATE complaints SET status='rejected' WHERE id=?", (complaint_id,))
+            # commit
+            conn.commit()
+            # close
+            conn.close()
+            return
+        logic_result=prioritize_complaint(description,ai_result,location)
+
+        # --- 4. UPDATE DATABASE WITH AI RESULTS ---
+        conn = sqlite3.connect("grievance.db")
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE complaints 
+            SET status='verified', 
+                priority=?, 
+                ai_category=?, 
+                ai_score=?, 
+                latitude=?, 
+                longitude=?
+            WHERE id=?
+        ''',
+        (
+            logic_result['priority'],
+            logic_result['category'],
+            logic_result['score'],
+            logic_result['lat'],
+            logic_result['lon'],
+            complaint_id
+        ))
+        conn.commit()
+        conn.close()
+
+        print(f"Complaint {complaint_id} Verified: {logic_result}")
+
+    except Exception as e:
+        print(f"Background Task Error: {e}")
+
 # --- 5. GOVT LOGIN (TESTING) ---
 @app.post("/login")
 async def login(
