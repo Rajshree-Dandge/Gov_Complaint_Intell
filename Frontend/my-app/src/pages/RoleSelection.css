@@ -16,15 +16,10 @@
 
 .role-page {
   min-height: 100vh;
-  background: var(--bg-page, hsl(210, 25%, 96%));
-  color: var(--text-primary, hsl(215, 50%, 23%));
+  background: var(--bg-page);
+  color: var(--text-primary);
   font-family: 'Segoe UI', system-ui, sans-serif;
   overflow-x: hidden;
-}
-
-body.dark-mode .role-page {
-  background: hsl(220, 25%, 8%);
-  color: hsl(210, 30%, 88%);
 }
 
 .role-nav {
@@ -32,14 +27,9 @@ body.dark-mode .role-page {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 2.5rem;
-  background: hsl(215, 50%, 23%);
-  color: hsl(0, 0%, 100%);
+  background: var(--bg-nav);
+  color: var(--text-nav);
   animation: fadeInDown 0.4s ease-out;
-}
-
-body.dark-mode .role-nav {
-  background: hsl(220, 28%, 8%);
-  border-bottom: 1px solid hsl(220, 20%, 18%);
 }
 
 .role-nav-brand {
@@ -65,12 +55,13 @@ body.dark-mode .role-nav {
   font-size: 2.2rem;
   font-weight: 800;
   margin: 0 0 0.5rem;
+  color: var(--text-heading);
   animation: fadeInUp 0.5s ease-out 0.1s both;
 }
 
 .role-subtext {
   font-size: 1.05rem;
-  opacity: 0.6;
+  color: var(--text-muted);
   margin: 0 0 3rem;
   animation: fadeInUp 0.5s ease-out 0.2s both;
 }
@@ -82,8 +73,8 @@ body.dark-mode .role-nav {
 }
 
 .role-option {
-  background: hsl(0, 0%, 100%);
-  border: 2px solid hsl(214, 25%, 88%);
+  background: var(--bg-card);
+  border: 2px solid var(--border-card);
   border-radius: 16px;
   padding: 2.5rem 2rem;
   text-align: left;
@@ -99,7 +90,7 @@ body.dark-mode .role-nav {
   position: absolute;
   inset: 0;
   border-radius: 14px;
-  background: linear-gradient(135deg, hsla(210, 65%, 45%, 0.03), transparent);
+  background: linear-gradient(135deg, hsla(168, 55%, 38%, 0.03), transparent);
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -111,20 +102,11 @@ body.dark-mode .role-nav {
 
 .role-option:hover {
   transform: translateY(-6px);
-  box-shadow: 0 15px 45px hsla(215, 50%, 23%, 0.14);
+  box-shadow: 0 15px 45px hsla(168, 40%, 25%, 0.14);
 }
 
-body.dark-mode .role-option {
-  background: hsl(220, 25%, 13%);
-  border-color: hsl(220, 20%, 20%);
-}
-
-body.dark-mode .role-option:hover {
-  box-shadow: 0 15px 45px hsla(0, 0%, 0%, 0.4);
-}
-
-.citizen-option { border-top: 4px solid hsl(210, 65%, 45%); }
-.gov-option { border-top: 4px solid hsl(45, 100%, 55%); }
+.citizen-option { border-top: 4px solid var(--accent-teal); }
+.gov-option { border-top: 4px solid var(--accent-yellow); }
 
 .role-option-icon {
   font-size: 2.8rem;
@@ -138,12 +120,13 @@ body.dark-mode .role-option:hover {
   margin: 0 0 0.5rem;
   font-size: 1.4rem;
   font-weight: 700;
+  color: var(--text-heading);
 }
 
 .role-option p {
   margin: 0 0 1rem;
   font-size: 0.95rem;
-  opacity: 0.7;
+  color: var(--text-secondary);
 }
 
 .role-option ul {
@@ -155,7 +138,7 @@ body.dark-mode .role-option:hover {
 .role-option li {
   padding: 0.3rem 0;
   font-size: 0.88rem;
-  opacity: 0.75;
+  color: var(--text-secondary);
   transition: transform 0.2s;
 }
 
@@ -163,20 +146,19 @@ body.dark-mode .role-option:hover {
 
 .role-option li::before {
   content: '✓ ';
-  color: hsl(140, 60%, 40%);
+  color: var(--accent-teal);
   font-weight: 700;
 }
 
 .role-option-cred {
-  background: hsl(210, 70%, 95%);
+  background: var(--accent-teal-light);
   padding: 0.6rem 0.9rem;
   border-radius: 8px;
   font-size: 0.8rem;
   margin-bottom: 1.25rem;
   font-weight: 500;
+  color: var(--text-primary);
 }
-
-body.dark-mode .role-option-cred { background: hsl(220, 30%, 18%); }
 
 .role-option-btn {
   width: 100%;
@@ -191,12 +173,28 @@ body.dark-mode .role-option-cred { background: hsl(220, 30%, 18%); }
 
 .role-option-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px hsla(215, 50%, 23%, 0.2);
+  box-shadow: 0 6px 18px hsla(168, 40%, 25%, 0.2);
 }
 
-.citizen-btn { background: hsl(210, 65%, 45%); color: hsl(0, 0%, 100%); }
-.gov-btn { background: hsl(215, 50%, 23%); color: hsl(0, 0%, 100%); }
-body.dark-mode .gov-btn { background: hsl(210, 60%, 35%); }
+.citizen-btn { background: var(--accent-teal); color: hsl(0, 0%, 100%); }
+.gov-btn { background: hsl(220, 45%, 22%); color: hsl(0, 0%, 100%); }
+
+.role-btn-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.citizen-btn-outline,
+.gov-btn-outline {
+  background: transparent;
+  border: 2px solid var(--accent-teal);
+  color: var(--accent-teal);
+}
+
+.citizen-btn-outline:hover,
+.gov-btn-outline:hover {
+  background: var(--accent-teal-light);
+}
 
 .role-back {
   margin-top: 2.5rem;
@@ -204,14 +202,14 @@ body.dark-mode .gov-btn { background: hsl(210, 60%, 35%); }
 }
 
 .role-back a {
-  color: var(--text-muted, hsl(215, 10%, 55%));
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 0.9rem;
   text-decoration: none;
   transition: color 0.2s;
 }
 
-.role-back a:hover { color: hsl(210, 65%, 45%); }
+.role-back a:hover { color: var(--accent-teal); }
 
 @media (max-width: 640px) {
   .role-cards { grid-template-columns: 1fr; }

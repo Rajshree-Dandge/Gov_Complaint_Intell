@@ -1,126 +1,142 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../integrations/supabase/client';
+import { 
+  getFirestore, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  getDoc,
+  addDoc, 
+  updateDoc, 
+  doc, 
+  orderBy, 
+  serverTimestamp 
+} from 'firebase/firestore';
+
+// Remove any old imports from '../integrations/firebase/config'
+import { auth, db, googleProvider } from '../lib/Firebase';
 import { useAuth } from './AuthContext';
 
 const ComplaintContext = createContext();
+// const db = getFirestore();
 
 export function ComplaintProvider({ children }) {
-  const { session, isGovernment } = useAuth();
+  const { user, isGovernment } = useAuth();
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // 1. Fetch Complaints (Related to current user)
   const fetchComplaints = useCallback(async () => {
-    if (!session) { setComplaints([]); return; }
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('complaints')
-      .select('*, complaint_history(*)')
-      .order('created_at', { ascending: false });
+  // GUARD: If user is not logged in yet, stop here.
+  if (!user || !user.id) {
+    console.log("Waiting for user ID...");
+    return; 
+  }
 
-    if (!error && data) {
-      setComplaints(data.map(c => ({
-        ...c,
-        id: c.complaint_number,
-        date: c.created_at?.split('T')[0],
-        citizenName: c.citizen_name || c.citizen_email,
-        imageUrl: c.image_url,
-        history: (c.complaint_history || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map(h => ({
-          status: h.status,
-          timestamp: h.created_at,
-          note: h.note,
-        })),
-      })));
+  setLoading(true);
+  try {
+    const complaintsRef = collection(db, "complaints");
+    let q;
+
+    if (isGovernment) {
+      q = query(complaintsRef, orderBy("created_at", "desc"));
+    } else {
+      // Now user.id is guaranteed to be a string, not undefined
+      q = query(
+        complaintsRef, 
+        where("user_id", "==", user.id), 
+        orderBy("created_at", "desc")
+      );
     }
+
+    const querySnapshot = await getDocs(q);
+    const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setComplaints(fetched);
+  } catch (error) {
+    console.error("Error fetching complaints:", error);
+  } finally {
     setLoading(false);
-  }, [session]);
+  }
+}, [user, isGovernment]);
 
   useEffect(() => {
+  // Only fetch if we actually have a valid user ID
+  if (user?.id) {
     fetchComplaints();
-  }, [fetchComplaints]);
+  }
+}, [user?.id, fetchComplaints]); // Dependency on user.id specifically
 
-  const addComplaint = async (complaint) => {
-    if (!session) return null;
-    const seqRes = await supabase.rpc('nextval', { seq_name: 'complaint_number_seq' }).single();
-    const num = seqRes.data || Math.floor(Math.random() * 9999);
-    const complaintNumber = `GRV-${String(num).padStart(3, '0')}`;
+  // 2. Add Complaint (Storing the User's UID for the link)
+  const addComplaint = async (complaintData) => {
+    if (!user) return null;
 
-    const { data, error } = await supabase
-      .from('complaints')
-      .insert({
-        user_id: session.user.id,
+    try {
+      const complaintNumber = `GRV-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+      const newComplaint = {
+        user_id: user.id, // CRITICAL: This links the complaint to the User Document
         complaint_number: complaintNumber,
-        citizen_email: session.user.email,
-        citizen_name: complaint.citizenName || session.user.user_metadata?.name || '',
-        phone: complaint.phone || '',
-        description: complaint.description,
-        category: complaint.category || 'Other',
-        location: complaint.location,
-        ward: complaint.ward || '',
-        language: complaint.language || 'en',
-        image_url: complaint.imageUrl || null,
+        citizen_email: user.email,
+        citizen_name: complaintData.citizenName || user.name || 'Anonymous',
+        description: complaintData.description,
+        category: complaintData.category || 'General',
+        location: complaintData.location,
         status: 'Pending',
-        priority: 'Medium',
-        sentiment: 'Neutral',
-      })
-      .select()
-      .single();
+        created_at: serverTimestamp(),
+        history: [{
+          status: 'Pending',
+          note: 'Complaint registered in system',
+          timestamp: Date.now()
+        }]
+      };
 
-    if (!error && data) {
-      // Insert initial history
-      await supabase.from('complaint_history').insert({
-        complaint_id: data.id,
-        status: 'Pending',
-        note: 'Complaint registered',
-      });
-
-      // Trigger email notification
-      try {
-        await supabase.functions.invoke('send-notification', {
-          body: { type: 'complaint_submitted', complaint_id: data.id },
-        });
-      } catch (e) { console.log('Email notification failed:', e); }
-
+      const docRef = await addDoc(collection(db, "complaints"), newComplaint);
       await fetchComplaints();
-      return data;
+      return { id: docRef.id, ...newComplaint };
+    } catch (error) {
+      console.error("Error adding complaint:", error);
+      return null;
     }
-    return null;
   };
 
-  const updateStatus = async (complaintNumber, newStatus) => {
-    const complaint = complaints.find(c => c.id === complaintNumber || c.complaint_number === complaintNumber);
-    if (!complaint) return;
-
-    const dbId = complaint.complaint_number === complaintNumber ? complaints.find(c => c.complaint_number === complaintNumber) : complaint;
-    const realId = dbId?.id !== complaintNumber ? complaint.id : null;
-
-    // Get the actual UUID
-    const { data: found } = await supabase
-      .from('complaints')
-      .select('id')
-      .eq('complaint_number', complaintNumber)
-      .single();
-
-    if (!found) return;
-
-    await supabase
-      .from('complaints')
-      .update({ status: newStatus })
-      .eq('id', found.id);
-
-    await supabase.from('complaint_history').insert({
-      complaint_id: found.id,
-      status: newStatus,
-      note: `Status changed to ${newStatus}`,
-    });
-
-    // Trigger email notification
+  // 3. Update Status & Trigger Notification Logic
+  const updateStatus = async (complaintDocId, newStatus) => {
     try {
-      await supabase.functions.invoke('send-notification', {
-        body: { type: 'status_update', complaint_id: found.id, new_status: newStatus },
-      });
-    } catch (e) { console.log('Email notification failed:', e); }
+      const complaintRef = doc(db, "complaints", complaintDocId);
+      const complaintSnap = await getDoc(complaintRef);
+      
+      if (!complaintSnap.exists()) return;
+      const complaintData = complaintSnap.data();
 
-    await fetchComplaints();
+      // Update the complaint status and history
+      await updateDoc(complaintRef, {
+        status: newStatus,
+        history: [...(complaintData.history || []), {
+          status: newStatus,
+          note: `Officer updated status to ${newStatus}`,
+          timestamp: Date.now()
+        }]
+      });
+
+      // RELATION LINKAGE: Find the user to notify them
+      const userRef = doc(db, "users", complaintData.user_id);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        console.log(`Ready to notify ${userData.name} at ${userData.email}`);
+        
+        // TRIGGER NOTIFICATION: Call your FastAPI endpoint here
+        // await fetch('http://localhost:8000/send-notification', {
+        //   method: 'POST',
+        //   body: JSON.stringify({ email: userData.email, status: newStatus })
+        // });
+      }
+
+      await fetchComplaints();
+    } catch (error) {
+      console.error("Error updating status:", error);
+    }
   };
 
   return (

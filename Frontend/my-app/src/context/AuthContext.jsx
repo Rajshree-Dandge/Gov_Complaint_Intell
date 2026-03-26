@@ -1,125 +1,101 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../integrations/supabase/client';
-import { lovable } from '../integrations/lovable';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  sendEmailVerification
+} from 'firebase/auth';
+import { auth } from '../lib/Firebase';
+import { validateUID } from '../utils/uidValidation';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Added: Manually set a user from the Python Backend response
+  const setLocalUser = (userData) => {
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session?.user) {
-        // Fetch profile with setTimeout to avoid deadlock
-        setTimeout(async () => {
-          const { data } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single();
-          setProfile(data);
-          setLoading(false);
-        }, 0);
-      } else {
-        setProfile(null);
-        setLoading(false);
+    // 1. Check for a locally saved session first (for page refreshes)
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+
+    // 2. Listen for Firebase Auth changes
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
       }
+      setLoading(false);
     });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (!session) setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
-  const register = async (email, password, name, phone, role = 'citizen') => {
+  const signUpWithEmail = async (email, password, name, role = 'citizen', uidNumber) => {
     setError('');
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { name, phone, role },
-      },
-    });
-    if (signUpError) {
-      setError(signUpError.message);
-      return false;
+    if (uidNumber && !validateUID(uidNumber)) {
+      const msg = "Invalid 12-digit UID. Please check your Aadhaar number.";
+      setError(msg);
+      return { success: false, error: msg };
     }
-    return true;
-  };
 
-  const login = async (email, password) => {
-    setError('');
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-    if (loginError) {
-      setError(loginError.message);
-      return false;
-    }
-    return true;
-  };
-
-  const signInWithGoogle = async () => {
-    setError('');
-    const result = await lovable.auth.signInWithOAuth('google', {
-      redirect_uri: window.location.origin,
-    });
-    if (result?.error) {
-      setError(result.error.message || 'Google sign-in failed');
-      return false;
-    }
-    return true;
-  };
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setProfile(null);
-  };
-
-  const isAuthenticated = !!session;
-  const isGovernment = profile?.role === 'government';
-  const isCitizen = profile?.role === 'citizen';
-  const user = session?.user
-    ? {
-        id: session.user.id,
-        email: session.user.email,
-        name: profile?.name || session.user.user_metadata?.name || '',
-        phone: profile?.phone || '',
-        role: profile?.role || 'citizen',
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      await sendEmailVerification(result.user);
+      return { success: true };
+    } catch (err) {
+      let friendlyError = err.message;
+      if (err.code === 'auth/email-already-in-use') {
+        friendlyError = "This email is already registered.";
       }
-    : null;
+      setError(friendlyError);
+      return { success: false, error: friendlyError };
+    }
+  };
+
+  const signInWithEmail = async (email, password) => {
+    setError('');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('user'); 
+    signOut(auth);
+    setUser(null);
+  };
+
+  const value = {
+    user,
+    setLocalUser, 
+    loading,
+    error,
+    setError,
+    signUpWithEmail,
+    signInWithEmail,
+    logout,
+    isAuthenticated: !!user,
+    isGovernment: user?.role === 'government'
+  };
 
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        user,
-        profile,
-        loading,
-        error,
-        isAuthenticated,
-        isGovernment,
-        isCitizen,
-        isCitizenAuthenticated: isAuthenticated && isCitizen,
-        register,
-        login,
-        signInWithGoogle,
-        logout,
-        setError,
-      }}
-    >
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);

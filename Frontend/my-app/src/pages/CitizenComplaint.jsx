@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -48,18 +47,30 @@ export default function CitizenComplaint() {
     };
 
     if ("geolocation" in navigator) {
-      // 1. This triggers the native browser prompt (near the search bar)
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // If allowed
-          setCoords({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setCoords({ latitude, longitude });
           setShowModal(false);
+          
+          try {
+            const res = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+            
+            if (res.data && res.data.address) {
+              const addr = res.data.address;
+              const street = addr.road || addr.suburb || addr.neighbourhood || addr.village || "Unknown Area";
+              const ward = addr.city_district || addr.suburb || addr.postcode || "General Zone";
+              setForm(prev => ({
+                ...prev,
+                location: street,
+                ward: ward
+              }));
+            }
+          } catch (err) {
+            console.error("Reverse Geocoding failed:", err);
+          }
         },
         (error) => {
-          // 2. If blocked/denied, show the custom dark modal
           console.error("Browser location blocked or failed.");
           setShowModal(true);
         },
@@ -70,7 +81,6 @@ export default function CitizenComplaint() {
     }
   };
 
-  // Trigger browser prompt as soon as the user lands on the page
   useEffect(() => {
     requestLocation();
   }, []);
@@ -99,20 +109,19 @@ export default function CitizenComplaint() {
     return newErrors;
   };
 
-  const [pipelineStep, setPipelineStep] = useState(0); // 0 to 4
+  const [pipelineStep, setPipelineStep] = useState(0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
-      // Re-show mandatory modal if they try to submit without location
       if (!coords.latitude) setShowModal(true);
       return;
     }
 
     setLoading(true);
-    setPipelineStep(1); // START STAGE 1
+    setPipelineStep(1);
 
     const formData = new FormData();
     formData.append("full_name", form.citizenName);
@@ -126,17 +135,15 @@ export default function CitizenComplaint() {
     formData.append("longitude", coords.longitude);
 
     try {
-      // Simulate pipeline progression for UX
-      setTimeout(() => setPipelineStep(2), 1500); // Stage 2: YOLO Scan
-      setTimeout(() => setPipelineStep(3), 3000); // Stage 3: Logic Brain
+      setTimeout(() => setPipelineStep(2), 1500);
+      setTimeout(() => setPipelineStep(3), 3000);
 
       const res = await axios.post("http://localhost:8000/submit-complaint", formData);
 
       if (res.data.status === "success") {
-        setPipelineStep(4); // Stage 4: Done
+        setPipelineStep(4);
         setTimeout(() => setSubmitted(true), 1000);
-      }
-      else {
+      } else {
         alert("AI Verification Failed: Please upload a valid photo.");
         setPipelineStep(0);
       }
@@ -147,18 +154,6 @@ export default function CitizenComplaint() {
       setLoading(false);
     }
   };
-
-  // 3. Add this visual inside your return (Above the button)
-  {
-    loading && (
-      <div className="pipeline-container">
-        <div className={`step ${pipelineStep >= 1 ? 'active' : ''}`}>📥 Storing in DB (Pending ID)</div>
-        <div className={`step ${pipelineStep >= 2 ? 'active' : ''}`}>👁️ YOLOv11 Scanning Image...</div>
-        <div className={`step ${pipelineStep >= 3 ? 'active' : ''}`}>🧠 Brain Categorizing Issue...</div>
-        <div className={`step ${pipelineStep >= 4 ? 'active' : ''}`}>✅ Verified & Assigned to Desk</div>
-      </div>
-    )
-  }
 
   if (submitted) {
     return (
@@ -174,13 +169,12 @@ export default function CitizenComplaint() {
 
   return (
     <div className="citizen-page">
-      {/* CUSTOM DARK DIALOG BOX (Appears only after user denies browser notification) */}
       {showModal && (
         <div className="location-modal-overlay">
           <div className="location-modal custom-dialog">
             <div className="modal-header">
               <span className="globe-icon">🌐</span>
-              <span className="url-text">localhost:8000</span>
+              <span className="url-text">127.0.0.1:8000</span>
             </div>
             <p>Location sharing is mandatory for government verification and improved performance. Please enable it in your browser settings.</p>
             <div className="modal-actions">
@@ -233,13 +227,19 @@ export default function CitizenComplaint() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Location (Area Name) <span className="required">*</span></label>
-              <input name="location" value={form.location} onChange={handleChange} placeholder="Street/Area" />
+              <label>
+                Location (Area Name) <span className="required">*</span>
+                {form.location && <span className="gps-verified-badge">✓ GPS Verified</span>}
+              </label>
+              <input name="location" value={form.location} onChange={handleChange} placeholder="Auto-detecting location..." readOnly={!!coords.latitude}/>
               {errors.location && <span className="error">{errors.location}</span>}
-            </div>
+            </div> {/* FIXED: Added closing div here */}
+
             <div className="form-group">
-              <label>Ward / Zone</label>
-              <input name="ward" value={form.ward} onChange={handleChange} placeholder="e.g. Ward 5" />
+              <label>Ward / Zone
+                {form.ward && <span className="gps-verified-badge">✓ GPS Verified</span>}
+              </label>
+              <input name="ward" value={form.ward} onChange={handleChange} placeholder="Auto-detecting ward..." readOnly={!!coords.latitude}/>
             </div>
           </div>
         </div>
@@ -259,6 +259,16 @@ export default function CitizenComplaint() {
           </div>
           {errors.image && <span className="error">{errors.image}</span>}
         </div>
+
+        {/* FIXED: Pipeline visual moved inside the form return area */}
+        {loading && (
+          <div className="pipeline-container">
+            <div className={`step ${pipelineStep >= 1 ? 'active' : ''}`}>📥 Storing in DB (Pending ID)</div>
+            <div className={`step ${pipelineStep >= 2 ? 'active' : ''}`}>👁️ YOLOv11 Scanning Image...</div>
+            <div className={`step ${pipelineStep >= 3 ? 'active' : ''}`}>🧠 Brain Categorizing Issue...</div>
+            <div className={`step ${pipelineStep >= 4 ? 'active' : ''}`}>✅ Verified & Assigned to Desk</div>
+          </div>
+        )}
 
         <button
           type="submit"

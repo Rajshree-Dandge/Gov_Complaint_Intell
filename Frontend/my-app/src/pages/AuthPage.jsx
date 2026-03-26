@@ -6,50 +6,50 @@ import './AuthPage.css';
 
 export default function AuthPage({ defaultRole = 'citizen' }) {
   const navigate = useNavigate();
-  const { login, register, signInWithGoogle, error, setError } = useAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, error, setError } = useAuth();
   const { isDark, toggleTheme } = useTheme();
-  const [isRegister, setIsRegister] = useState(false);
-  const [role] = useState(defaultRole);
-  const [form, setForm] = useState({ email: '', password: '', name: '', phone: '' });
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const redirectPath = defaultRole === 'government' ? '/dashboard' : '/citizen';
+
+  const handleGoogle = async () => {
+    setSubmitting(true);
     setError('');
+    setSuccessMsg('');
+    const ok = await signInWithGoogle();
+    if (ok) navigate(redirectPath);
+    setSubmitting(false);
   };
 
-  const handleSubmit = async (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    setSuccess('');
+    setError('');
+    setSuccessMsg('');
 
-    if (isRegister) {
-      const ok = await register(form.email, form.password, form.name, form.phone, role);
-      if (ok) {
-        setSuccess('Account created successfully! You are now logged in.');
-        setTimeout(() => navigate(role === 'government' ? '/dashboard' : '/citizen'), 1500);
+    if (isSignUp) {
+      const result = await signUpWithEmail(email, password, name, defaultRole);
+      if (result?.success) {
+        setSuccessMsg('Account created! Please check your email to verify, then sign in.');
+        setIsSignUp(false);
       }
     } else {
-      const ok = await login(form.email, form.password);
-      if (ok) {
-        navigate(role === 'government' ? '/dashboard' : '/citizen');
-      }
+      const ok = await signInWithEmail(email, password);
+      if (ok) navigate(redirectPath);
     }
     setSubmitting(false);
   };
 
-  const handleGoogle = async () => {
-    setSubmitting(true);
-    await signInWithGoogle();
-    setSubmitting(false);
-  };
-
-  const icon = role === 'government' ? '🏛️' : '👤';
-  const title = role === 'government' ? 'Government Portal' : 'Citizen Portal';
-  const subtitle = role === 'government'
-    ? (isRegister ? 'Create your government official account' : 'Sign in to access the Grievance Dashboard')
-    : (isRegister ? 'Create your citizen account' : 'Sign in to file and track your grievances');
+  const icon = defaultRole === 'government' ? '🏛️' : '👤';
+  const title = defaultRole === 'government' ? 'Government Portal' : 'Citizen Portal';
+  const subtitle = defaultRole === 'government'
+    ? 'Sign in to access the Grievance Dashboard'
+    : 'Sign in to file and track your grievances';
 
   return (
     <div className="auth-page">
@@ -64,69 +64,30 @@ export default function AuthPage({ defaultRole = 'citizen' }) {
           <p>{subtitle}</p>
         </div>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {error && <div className="auth-error">{error}</div>}
-          {success && <div className="auth-success">{success}</div>}
+        {error && <div className="auth-error">{error}</div>}
+        {successMsg && <div className="auth-success">{successMsg}</div>}
 
-          {isRegister && (
-            <>
-              <div className="auth-field">
-                <label>Full Name <span className="req">*</span></label>
-                <input
-                  type="text"
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder="Enter your full name"
-                  required
-                />
-              </div>
-              <div className="auth-field">
-                <label>Phone Number</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={form.phone}
-                  onChange={handleChange}
-                  placeholder="Enter phone number"
-                />
-              </div>
-            </>
+        <form className="auth-form" onSubmit={handleEmailSubmit}>
+          {isSignUp && (
+            <div className="auth-field">
+              <label>Full Name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Enter your full name" required />
+            </div>
           )}
-
           <div className="auth-field">
             <label>Email <span className="req">*</span></label>
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder="Enter your email"
-              required
-            />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Enter your email" required />
           </div>
-
           <div className="auth-field">
             <label>Password <span className="req">*</span></label>
-            <input
-              type="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              placeholder="Enter your password"
-              required
-              minLength={6}
-            />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" required minLength={6} />
           </div>
-
           <button type="submit" className="btn-auth" disabled={submitting}>
-            {submitting ? 'Please wait...' : isRegister ? 'Create Account' : 'Sign In'}
+            {submitting ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
           </button>
         </form>
 
-        <div className="auth-divider">
-          <span>OR</span>
-        </div>
+        <div className="auth-divider">or</div>
 
         <button className="btn-google" onClick={handleGoogle} disabled={submitting}>
           <svg viewBox="0 0 24 24" width="20" height="20" className="google-icon">
@@ -135,15 +96,14 @@ export default function AuthPage({ defaultRole = 'citizen' }) {
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
           </svg>
-          Continue with Google
+          {submitting ? 'Signing in...' : 'Continue with Google'}
         </button>
 
         <div className="auth-toggle">
-          {isRegister ? (
-            <p>Already have an account? <button onClick={() => { setIsRegister(false); setError(''); }}>Sign In</button></p>
-          ) : (
-            <p>Don't have an account? <button onClick={() => { setIsRegister(true); setError(''); }}>Create Account</button></p>
-          )}
+          {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+          <button onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccessMsg(''); }}>
+            {isSignUp ? 'Sign In' : 'Sign Up'}
+          </button>
         </div>
 
         <div className="auth-footer">

@@ -260,6 +260,98 @@ body.dark-mode .auth-footer { border-top-color: rgba(255,255,255,0.08); }
 .auth-footer a:hover { color: #2563eb; }
 body.dark-mode .auth-footer a { color: #94a3b8; }
 
+/* Container for the verification section */
+.verification-box {
+  margin-top: 10px;
+  padding: 20px;
+  background-color: var(--bg-secondary, #f8f9fa);
+  border: 1px dashed #cbd5e0;
+  border-radius: 12px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.verification-box p {
+  font-size: 0.9rem;
+  color: #4a5568;
+  margin-bottom: 15px;
+}
+
+/* The DigiLocker Button */
+.btn-digilocker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+  padding: 12px 24px;
+  background-color: #ffffff;
+  color: #004a99; /* Official DigiLocker Blue */
+  border: 1.5px solid #004a99;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s, box-shadow 0.2s;
+}
+
+.btn-digilocker img {
+  height: 24px; /* Adjust based on your logo aspect ratio */
+  width: auto;
+}
+
+.btn-digilocker:hover {
+  background-color: #f0f7ff;
+  box-shadow: 0 4px 12px rgba(0, 74, 153, 0.15);
+}
+
+.btn-digilocker:active {
+  transform: scale(0.98);
+}
+
+/* Verified Status UI (Visible after setIsVerified(true)) */
+.verified-status {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background-color: #f0fff4; /* Success Green Background */
+  border: 1px solid #c6f6d5;
+  border-radius: 10px;
+  animation: slideIn 0.4s ease-out;
+}
+
+.verified-status .check {
+  font-size: 1.5rem;
+  color: #2f855a;
+}
+
+.verified-status strong {
+  display: block;
+  color: #22543d;
+  font-size: 1rem;
+}
+
+.verified-status p {
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace; /* Monospaced for UID */
+  color: #276749;
+  font-size: 0.9rem;
+}
+
+/* Entrance Animation */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 480px) {
   .auth-card { padding: 1.5rem; margin: 1rem; }
   .auth-header h1 { font-size: 1.3rem; }
