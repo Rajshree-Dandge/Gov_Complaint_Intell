@@ -43,7 +43,7 @@ export default function CitizenSignup() {
     setSubmitting(true);
     setError('');
     try {
-      const response = await fetch('http://localhost:8001/api/send-otp', {
+      const response = await fetch('http://localhost:8000/api/send-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -74,7 +74,7 @@ export default function CitizenSignup() {
     setSubmitting(true);
     setError('');
     try {
-      const verifyRes = await fetch('http://localhost:8001/api/verify-otp', {
+      const verifyRes = await fetch('http://localhost:8000/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email.trim(), code: otp.trim() }),
@@ -102,34 +102,23 @@ export default function CitizenSignup() {
 
     setSubmitting(true);
     try {
-      // 1. Firebase Auth
-      const result = await signUpWithEmail(form.email, form.password, form.name, 'citizen', form.uid);
-      if (!result?.success) throw new Error('Firebase registration failed');
-
-      // 2. Python Backend Registration
-      const dbResponse = await fetch('http://localhost:8001/register/citizen', {
+      // Direct Python Backend Registration (FastAPI)
+      const dbResponse = await fetch('http://localhost:8000/register/citizen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: form.name,
           email: form.email,
           phone: form.phone,
-          uid_number: form.uid,
+          uid_number: form.uid || "N/A",
           password: form.password,
         }),
       });
 
-      if (!dbResponse.ok) throw new Error('Database registration failed');
-
-      // 3. Trigger Welcome Email 
-      const welcomeResponse = await fetch('http://localhost:8001/api/welcome-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: form.email,
-          name: form.name
-        }),
-      });
+      if (!dbResponse.ok) {
+        const result = await dbResponse.json();
+        throw new Error(result.detail || 'Database registration failed');
+      }
 
       setSuccessMsg('Account created successfully! Redirecting...');
       setTimeout(() => navigate('/citizen-login'), 2000);

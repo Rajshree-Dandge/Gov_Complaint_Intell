@@ -1,139 +1,62 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { 
-  getFirestore, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  getDoc,
-  addDoc, 
-  updateDoc, 
-  doc, 
-  orderBy, 
-  serverTimestamp 
-} from 'firebase/firestore';
-
-// Remove any old imports from '../integrations/firebase/config'
-import { auth, db, googleProvider } from '../lib/Firebase';
+import axios from 'axios';
 import { useAuth } from './AuthContext';
 
 const ComplaintContext = createContext();
-// const db = getFirestore();
 
 export function ComplaintProvider({ children }) {
   const { user, isGovernment } = useAuth();
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // 1. Fetch Complaints (Related to current user)
-  const fetchComplaints = useCallback(async () => {
-  // GUARD: If user is not logged in yet, stop here.
-  if (!user || !user.id) {
-    console.log("Waiting for user ID...");
-    return; 
-  }
+  // 1. Fetch Complaints from Python Backend
+  const fetchComplaints = useCallback(async (category = "Roads") => {
+    if (!user) return;
 
-  setLoading(true);
-  try {
-    const complaintsRef = collection(db, "complaints");
-    let q;
-
-    if (isGovernment) {
-      q = query(complaintsRef, orderBy("created_at", "desc"));
-    } else {
-      // Now user.id is guaranteed to be a string, not undefined
-      q = query(
-        complaintsRef, 
-        where("user_id", "==", user.id), 
-        orderBy("created_at", "desc")
-      );
-    }
-
-    const querySnapshot = await getDocs(q);
-    const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    setComplaints(fetched);
-  } catch (error) {
-    console.error("Error fetching complaints:", error);
-  } finally {
-    setLoading(false);
-  }
-}, [user, isGovernment]);
-
-  useEffect(() => {
-  // Only fetch if we actually have a valid user ID
-  if (user?.id) {
-    fetchComplaints();
-  }
-}, [user?.id, fetchComplaints]); // Dependency on user.id specifically
-
-  // 2. Add Complaint (Storing the User's UID for the link)
-  const addComplaint = async (complaintData) => {
-    if (!user) return null;
-
+    setLoading(true);
     try {
-      const complaintNumber = `GRV-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-
-      const newComplaint = {
-        user_id: user.id, // CRITICAL: This links the complaint to the User Document
-        complaint_number: complaintNumber,
-        citizen_email: user.email,
-        citizen_name: complaintData.citizenName || user.name || 'Anonymous',
-        description: complaintData.description,
-        category: complaintData.category || 'General',
-        location: complaintData.location,
-        status: 'Pending',
-        created_at: serverTimestamp(),
-        history: [{
-          status: 'Pending',
-          note: 'Complaint registered in system',
-          timestamp: Date.now()
-        }]
-      };
-
-      const docRef = await addDoc(collection(db, "complaints"), newComplaint);
-      await fetchComplaints();
-      return { id: docRef.id, ...newComplaint };
-    } catch (error) {
-      console.error("Error adding complaint:", error);
-      return null;
-    }
-  };
-
-  // 3. Update Status & Trigger Notification Logic
-  const updateStatus = async (complaintDocId, newStatus) => {
-    try {
-      const complaintRef = doc(db, "complaints", complaintDocId);
-      const complaintSnap = await getDoc(complaintRef);
+      const token = localStorage.getItem('token');
+      const ward = user.ward || user.zone || "Ward 1";
       
-      if (!complaintSnap.exists()) return;
-      const complaintData = complaintSnap.data();
-
-      // Update the complaint status and history
-      await updateDoc(complaintRef, {
-        status: newStatus,
-        history: [...(complaintData.history || []), {
-          status: newStatus,
-          note: `Officer updated status to ${newStatus}`,
-          timestamp: Date.now()
-        }]
+      const response = await axios.get("http://127.0.0.1:8000/get-complaints", {
+        params: { ward, category },
+        headers: { Authorization: `Bearer ${token}` }
       });
 
-      // RELATION LINKAGE: Find the user to notify them
-      const userRef = doc(db, "users", complaintData.user_id);
-      const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        console.log(`Ready to notify ${userData.name} at ${userData.email}`);
-        
-        // TRIGGER NOTIFICATION: Call your FastAPI endpoint here
-        // await fetch('http://localhost:8000/send-notification', {
-        //   method: 'POST',
-        //   body: JSON.stringify({ email: userData.email, status: newStatus })
-        // });
+      if (Array.isArray(response.data)) {
+        setComplaints(response.data);
       }
+    } catch (error) {
+      console.error("Error fetching complaints from backend:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
-      await fetchComplaints();
+  useEffect(() => {
+    if (user) {
+      fetchComplaints();
+    }
+  }, [user, fetchComplaints]);
+
+  // 2. Add Complaint (Stub - handled by CitizenComplaint.jsx directly usually)
+  const addComplaint = async (complaintData) => {
+    // In this unified architecture, CitizenComplaint.jsx handles the multi-part form directly.
+    // This context function can be used to refresh the list.
+    await fetchComplaints();
+    return { success: true };
+  };
+
+  // 3. Update Status (Needs backend endpoint, currently stubs)
+  const updateStatus = async (complaintId, newStatus) => {
+    try {
+      console.log(`Updating complaint ${complaintId} to ${newStatus}`);
+      // In a real scenario, call: await axios.post("http://127.0.0.1:8000/update-status", { id: complaintId, status: newStatus });
+      
+      // Update local state for immediate feedback
+      setComplaints(prev => prev.map(c => 
+        (c.id === complaintId || c.complaint_number === complaintId) ? { ...c, status: newStatus } : c
+      ));
     } catch (error) {
       console.error("Error updating status:", error);
     }
@@ -148,4 +71,4 @@ export function ComplaintProvider({ children }) {
 
 export function useComplaints() {
   return useContext(ComplaintContext);
-}
+}

@@ -51,7 +51,7 @@ export default function GovSignup() {
     setSubmitting(true);
     setError('');
     try {
-      const response = await fetch('http://localhost:8001/api/send-otp', {
+      const response = await fetch('http://localhost:8000/api/send-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -84,7 +84,7 @@ export default function GovSignup() {
     setSubmitting(true);
     setError('');
     try {
-      const verifyRes = await fetch('http://localhost:8001/api/verify-otp', {
+      const verifyRes = await fetch('http://localhost:8000/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email.trim(), code: otp.trim() }),
@@ -124,7 +124,7 @@ export default function GovSignup() {
       formData.append('password', form.password);
       formData.append('proof', proofFile);
 
-      const response = await fetch('http://localhost:8001/register/government', { 
+      const response = await fetch('http://localhost:8000/register/government', { 
       method: 'POST',
       body: formData,
     });

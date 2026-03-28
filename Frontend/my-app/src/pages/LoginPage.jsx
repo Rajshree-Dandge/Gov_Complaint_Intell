@@ -6,7 +6,7 @@ import './AuthPage.css';
 
 export default function LoginPage({ defaultRole = 'citizen' }) {
   const navigate = useNavigate();
-  const { setLocalUser, error, setError } = useAuth(); // Added setLocalUser
+  const { login, error, setError } = useAuth(); // Renamed setLocalUser to login
   const { isDark, toggleTheme } = useTheme();
   
   const [step, setStep] = useState('credentials'); 
@@ -36,14 +36,14 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
     setSubmitting(true);
     setError('');
     try {
-        const response = await fetch('http://localhost:8001/api/send-otp', {
+        const response = await fetch('http://localhost:8000/api/send-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
       email: email.trim(), 
       name: name.trim(),
       role: defaultRole,
-      is_signup: false // <--- THIS WAS MISSING
+      is_signup: false
   }),
 });
 
@@ -67,37 +67,32 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
     setSubmitting(true);
     setError('');
     try {
-      const verifyRes = await fetch('http://localhost:8001/api/verify-otp', {
+      const verifyRes = await fetch('http://localhost:8000/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), code: otp.trim() }),
       });
 
       const result = await verifyRes.json();
-      console.log("Login Result:", result); // DEBUG: Check if role is here
       if (!verifyRes.ok) throw new Error(result.detail || 'Invalid OTP');
 
-      console.log("Processing Role:", result.role);
-
       const finalRole = result.role.trim().toLowerCase();
-      // Update Auth State so ProtectedRoute allows entry
-      setLocalUser({
+      // Update Auth State using the new login function (userData, token)
+      login({
         email: email.trim(),
         name: name.trim(),
-        role: finalRole // Ensure backend returns 'government' or 'citizen'
-      });
+        role: finalRole,
+        ward: result.ward || "General" // Some users might have wards
+      }, result.token);
 
-      console.log("email:", email.trim(), "name:", name.trim(), "role from backend:", finalRole); // DEBUG: Check values being set
       setSuccessMsg('Login Successful!');
       
-      // Navigate to correct page based on actual role from DB
       setTimeout(() => {
           if (finalRole === 'government') {
             navigate('/dashboard');
           } else if (finalRole === 'citizen') {
             navigate('/citizen');
-          } else{
-            console.error("Unknown role received:", finalRole);
+          } else {
             setError('Unknown user role. Contact support.');
           }
       }, 1000);
