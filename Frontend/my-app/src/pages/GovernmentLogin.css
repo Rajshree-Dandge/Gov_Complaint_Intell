@@ -23,35 +23,30 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, hsl(215, 50%, 23%) 0%, hsl(210, 50%, 32%) 50%, hsl(215, 45%, 27%) 100%);
+  background: linear-gradient(135deg, hsl(168, 45%, 22%) 0%, hsl(168, 50%, 32%) 50%, hsl(170, 42%, 26%) 100%);
   background-size: 200% 200%;
   animation: bgShift 8s ease-in-out infinite;
   padding: 2rem;
 }
 
 body.dark-mode .login-page {
-  background: linear-gradient(135deg, hsl(220, 25%, 10%) 0%, hsl(220, 30%, 15%) 50%, hsl(220, 25%, 12%) 100%);
+  background: linear-gradient(135deg, hsl(200, 25%, 8%) 0%, hsl(200, 22%, 14%) 50%, hsl(200, 25%, 10%) 100%);
   background-size: 200% 200%;
 }
 
 .login-card {
-  background: var(--bg-card, hsl(0, 0%, 100%));
+  background: var(--bg-card);
   border-radius: 20px;
   box-shadow: 0 25px 70px hsla(0, 0%, 0%, 0.3);
   width: 100%;
   max-width: 420px;
   overflow: hidden;
-  border: 1px solid var(--border-card, hsl(214, 25%, 88%));
+  border: 1px solid var(--border-card);
   animation: fadeInScale 0.5s ease-out;
 }
 
-body.dark-mode .login-card {
-  background: hsl(220, 25%, 13%);
-  border-color: hsl(220, 20%, 20%);
-}
-
 .login-header {
-  background: linear-gradient(135deg, hsl(215, 50%, 23%), hsl(210, 45%, 30%));
+  background: linear-gradient(135deg, hsl(168, 45%, 28%), hsl(168, 50%, 35%));
   color: hsl(0, 0%, 100%);
   padding: 2.5rem 2rem 2rem;
   text-align: center;
@@ -65,11 +60,11 @@ body.dark-mode .login-card {
   bottom: -30px; right: -30px;
   width: 100px; height: 100px;
   border-radius: 50%;
-  background: hsla(45, 100%, 55%, 0.08);
+  background: hsla(168, 60%, 50%, 0.08);
 }
 
 body.dark-mode .login-header {
-  background: linear-gradient(135deg, hsl(220, 30%, 12%), hsl(220, 25%, 18%));
+  background: linear-gradient(135deg, hsl(200, 25%, 10%), hsl(200, 22%, 16%));
 }
 
 .login-emblem {
@@ -99,63 +94,53 @@ body.dark-mode .login-header {
 }
 
 .login-error {
-  background: hsl(0, 80%, 95%);
-  color: hsl(0, 60%, 40%);
+  background: hsl(0, 80%, 96%);
+  color: hsl(0, 60%, 45%);
   padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.875rem;
   margin-bottom: 1rem;
-  border-left: 4px solid hsl(0, 60%, 40%);
+  border-left: 4px solid hsl(0, 60%, 45%);
   animation: fadeInUp 0.3s ease-out;
 }
 
 body.dark-mode .login-error {
-  background: hsl(0, 40%, 18%);
+  background: hsla(0, 40%, 25%, 0.3);
   color: hsl(0, 60%, 65%);
 }
 
-.login-field {
-  margin-bottom: 1.25rem;
-}
+.login-field { margin-bottom: 1.25rem; }
 
 .login-field label {
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--text-secondary, hsl(215, 15%, 45%));
+  color: var(--text-secondary);
   margin-bottom: 0.4rem;
 }
-
-body.dark-mode .login-field label { color: hsl(210, 20%, 65%); }
 
 .login-field input {
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 2px solid var(--border-input, hsl(214, 25%, 88%));
+  border: 2px solid var(--border-input);
   border-radius: 8px;
   font-size: 1rem;
   transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
-  background: var(--bg-input, hsl(210, 30%, 97%));
-  color: var(--text-primary, hsl(215, 50%, 23%));
-}
-
-body.dark-mode .login-field input {
-  background: hsl(220, 25%, 16%);
-  border-color: hsl(220, 20%, 25%);
-  color: hsl(210, 30%, 88%);
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .login-field input:focus {
   outline: none;
-  border-color: var(--accent-blue, hsl(210, 65%, 45%));
-  box-shadow: 0 0 0 3px hsla(210, 65%, 45%, 0.12);
+  border-color: var(--accent-teal);
+  box-shadow: 0 0 0 3px hsla(168, 55%, 38%, 0.12);
 }
 
 .btn-login {
   width: 100%;
   padding: 0.85rem;
-  background: linear-gradient(135deg, hsl(215, 50%, 23%), hsl(210, 45%, 30%));
+  background: linear-gradient(135deg, hsl(168, 45%, 28%), hsl(168, 50%, 35%));
   color: hsl(0, 0%, 100%);
   border: none;
   border-radius: 8px;
@@ -167,37 +152,33 @@ body.dark-mode .login-field input {
 
 .btn-login:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px hsla(215, 50%, 23%, 0.3);
-}
-
-body.dark-mode .btn-login {
-  background: linear-gradient(135deg, hsl(210, 60%, 35%), hsl(210, 50%, 42%));
+  box-shadow: 0 6px 20px hsla(168, 55%, 38%, 0.3);
 }
 
 .login-demo-note {
   margin-top: 1.25rem;
   padding: 0.75rem;
-  background: hsl(210, 70%, 95%);
+  background: var(--accent-teal-light);
   border-radius: 8px;
   font-size: 0.8rem;
-  color: hsl(210, 60%, 35%);
+  color: hsl(168, 50%, 30%);
   text-align: center;
-  border: 1px solid hsl(210, 60%, 88%);
+  border: 1px solid hsla(168, 50%, 38%, 0.2);
 }
 
 body.dark-mode .login-demo-note {
-  background: hsl(210, 40%, 18%);
-  color: hsl(210, 60%, 60%);
-  border-color: hsl(210, 30%, 25%);
+  background: hsla(168, 40%, 25%, 0.15);
+  color: hsl(168, 50%, 55%);
+  border-color: hsla(168, 40%, 35%, 0.2);
 }
 
 .login-footer { padding: 1rem 2rem 1.5rem; text-align: center; }
 
 .login-footer a {
-  color: var(--text-muted, hsl(215, 10%, 55%));
+  color: var(--text-muted);
   text-decoration: none;
   font-size: 0.875rem;
   transition: color 0.2s;
 }
 
-.login-footer a:hover { color: var(--accent-blue, hsl(210, 65%, 45%)); }
+.login-footer a:hover { color: var(--accent-teal); }

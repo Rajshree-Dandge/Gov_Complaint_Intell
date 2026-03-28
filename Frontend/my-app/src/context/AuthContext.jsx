@@ -1,57 +1,101 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  sendEmailVerification
+} from 'firebase/auth';
+import { auth } from '../lib/Firebase';
+import { validateUID } from '../utils/uidValidation';
 
 const AuthContext = createContext();
 
-const DEMO_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123',
-};
-
 export function AuthProvider({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isCitizenAuthenticated, setIsCitizenAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  const login = (username, password) => {
-    if (username === DEMO_CREDENTIALS.username && password === DEMO_CREDENTIALS.password) {
-      setIsAuthenticated(true);
-      setUser({ username, role: 'Government Official' });
-      setError('');
-      return true;
-    }
-    setError('Invalid username or password');
-    return false;
+  
+  // Added: Manually set a user from the Python Backend response
+  const setLocalUser = (userData) => {
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
   };
 
-  const citizenLogin = (name, identityNumber, phone) => {
-    if (!name.trim() || !identityNumber.trim()) {
-      setError('Name and Identity Number are required');
-      return false;
+  useEffect(() => {
+    // 1. Check for a locally saved session first (for page refreshes)
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
     }
-    if (identityNumber.replace(/\s/g, '').length < 10) {
-      setError('Please enter a valid identity number (minimum 10 digits)');
-      return false;
-    }
-    setIsCitizenAuthenticated(true);
-    setUser({ name, identityNumber, phone, role: 'Citizen' });
+
+    // 2. Listen for Firebase Auth changes
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const signUpWithEmail = async (email, password, name, role = 'citizen', uidNumber) => {
     setError('');
-    return true;
+    if (uidNumber && !validateUID(uidNumber)) {
+      const msg = "Invalid 12-digit UID. Please check your Aadhaar number.";
+      setError(msg);
+      return { success: false, error: msg };
+    }
+
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      await sendEmailVerification(result.user);
+      return { success: true };
+    } catch (err) {
+      let friendlyError = err.message;
+      if (err.code === 'auth/email-already-in-use') {
+        friendlyError = "This email is already registered.";
+      }
+      setError(friendlyError);
+      return { success: false, error: friendlyError };
+    }
+  };
+
+  const signInWithEmail = async (email, password) => {
+    setError('');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      return { success: false, error: err.message };
+    }
   };
 
   const logout = () => {
-    setIsAuthenticated(false);
-    setIsCitizenAuthenticated(false);
+    localStorage.removeItem('user'); 
+    signOut(auth);
     setUser(null);
   };
 
+  const value = {
+    user,
+    setLocalUser, 
+    loading,
+    error,
+    setError,
+    signUpWithEmail,
+    signInWithEmail,
+    logout,
+    isAuthenticated: !!user,
+    isGovernment: user?.role === 'government'
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isCitizenAuthenticated, user, error, login, citizenLogin, logout }}>
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);

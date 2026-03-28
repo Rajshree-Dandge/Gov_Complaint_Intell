@@ -1,141 +1,146 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { 
+  getFirestore, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  getDoc,
+  addDoc, 
+  updateDoc, 
+  doc, 
+  orderBy, 
+  serverTimestamp 
+} from 'firebase/firestore';
+
+// Remove any old imports from '../integrations/firebase/config'
+import { auth, db, googleProvider } from '../lib/Firebase';
+import { useAuth } from './AuthContext';
 
 const ComplaintContext = createContext();
-
-const now = () => new Date().toISOString();
-
-const initialComplaints = [
-  {
-    id: 'GRV-001',
-    citizenName: 'Ramesh Kumar',
-    description: 'Large pothole on MG Road near sector 5 junction causing accidents daily.',
-    category: 'Roads',
-    location: 'MG Road, Sector 5',
-    ward: 'Ward 12',
-    status: 'Pending',
-    priority: 'High',
-    date: '2026-02-01',
-    imageUrl: null,
-    sentiment: 'Angry',
-    history: [{ status: 'Pending', timestamp: '2026-02-01T09:00:00Z', note: 'Complaint registered' }],
-  },
-  {
-    id: 'GRV-002',
-    citizenName: 'Sunita Devi',
-    description: 'Garbage not collected from colony for 5 days. Terrible smell spreading.',
-    category: 'Sanitation',
-    location: 'Green Park Colony',
-    ward: 'Ward 7',
-    status: 'In Progress',
-    priority: 'Medium',
-    date: '2026-02-03',
-    imageUrl: null,
-    sentiment: 'Frustrated',
-    history: [
-      { status: 'Pending', timestamp: '2026-02-03T10:00:00Z', note: 'Complaint registered' },
-      { status: 'In Progress', timestamp: '2026-02-05T14:30:00Z', note: 'Assigned to sanitation team' },
-    ],
-  },
-  {
-    id: 'GRV-003',
-    citizenName: 'Ahmed Khan',
-    description: 'Street light broken on Station Road. Very unsafe at night.',
-    category: 'Electrical',
-    location: 'Station Road',
-    ward: 'Ward 3',
-    status: 'Resolved',
-    priority: 'Medium',
-    date: '2026-01-20',
-    imageUrl: null,
-    sentiment: 'Concerned',
-    history: [
-      { status: 'Pending', timestamp: '2026-01-20T08:00:00Z', note: 'Complaint registered' },
-      { status: 'In Progress', timestamp: '2026-01-22T11:00:00Z', note: 'Electrician dispatched' },
-      { status: 'Resolved', timestamp: '2026-01-25T16:00:00Z', note: 'Street light replaced' },
-    ],
-  },
-  {
-    id: 'GRV-004',
-    citizenName: 'Priya Sharma',
-    description: 'Water pipeline leaking near main market. Water wastage for 3 days.',
-    category: 'Water Supply',
-    location: 'Main Market, Block A',
-    ward: 'Ward 12',
-    status: 'Pending',
-    priority: 'Urgent',
-    date: '2026-02-10',
-    imageUrl: null,
-    sentiment: 'Angry',
-    history: [{ status: 'Pending', timestamp: '2026-02-10T07:30:00Z', note: 'Complaint registered' }],
-  },
-  {
-    id: 'GRV-005',
-    citizenName: 'Vikram Singh',
-    description: 'Open drain overflowing near school. Health hazard for children.',
-    category: 'Drainage',
-    location: 'Govt. School Road, Sector 9',
-    ward: 'Ward 5',
-    status: 'Pending',
-    priority: 'Urgent',
-    date: '2026-02-11',
-    imageUrl: null,
-    sentiment: 'Angry',
-    history: [{ status: 'Pending', timestamp: '2026-02-11T06:45:00Z', note: 'Complaint registered' }],
-  },
-  {
-    id: 'GRV-006',
-    citizenName: 'Meena Patel',
-    description: 'Park bench broken and playground equipment rusted.',
-    category: 'Parks',
-    location: 'Central Park, Sector 2',
-    ward: 'Ward 1',
-    status: 'In Progress',
-    priority: 'Low',
-    date: '2026-01-28',
-    imageUrl: null,
-    sentiment: 'Neutral',
-    history: [
-      { status: 'Pending', timestamp: '2026-01-28T12:00:00Z', note: 'Complaint registered' },
-      { status: 'In Progress', timestamp: '2026-02-01T09:00:00Z', note: 'Maintenance crew assigned' },
-    ],
-  },
-];
+// const db = getFirestore();
 
 export function ComplaintProvider({ children }) {
-  const [complaints, setComplaints] = useState(initialComplaints);
+  const { user, isGovernment } = useAuth();
+  const [complaints, setComplaints] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const addComplaint = (complaint) => {
-    const newComplaint = {
-      ...complaint,
-      id: `GRV-${String(complaints.length + 1).padStart(3, '0')}`,
-      status: 'Pending',
-      priority: 'Medium',
-      date: new Date().toISOString().split('T')[0],
-      sentiment: 'Neutral',
-      history: [{ status: 'Pending', timestamp: now(), note: 'Complaint registered' }],
-    };
-    setComplaints((prev) => [newComplaint, ...prev]);
+  // 1. Fetch Complaints (Related to current user)
+  const fetchComplaints = useCallback(async () => {
+  // GUARD: If user is not logged in yet, stop here.
+  if (!user || !user.id) {
+    console.log("Waiting for user ID...");
+    return; 
+  }
+
+  setLoading(true);
+  try {
+    const complaintsRef = collection(db, "complaints");
+    let q;
+
+    if (isGovernment) {
+      q = query(complaintsRef, orderBy("created_at", "desc"));
+    } else {
+      // Now user.id is guaranteed to be a string, not undefined
+      q = query(
+        complaintsRef, 
+        where("user_id", "==", user.id), 
+        orderBy("created_at", "desc")
+      );
+    }
+
+    const querySnapshot = await getDocs(q);
+    const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setComplaints(fetched);
+  } catch (error) {
+    console.error("Error fetching complaints:", error);
+  } finally {
+    setLoading(false);
+  }
+}, [user, isGovernment]);
+
+  useEffect(() => {
+  // Only fetch if we actually have a valid user ID
+  if (user?.id) {
+    fetchComplaints();
+  }
+}, [user?.id, fetchComplaints]); // Dependency on user.id specifically
+
+  // 2. Add Complaint (Storing the User's UID for the link)
+  const addComplaint = async (complaintData) => {
+    if (!user) return null;
+
+    try {
+      const complaintNumber = `GRV-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+      const newComplaint = {
+        user_id: user.id, // CRITICAL: This links the complaint to the User Document
+        complaint_number: complaintNumber,
+        citizen_email: user.email,
+        citizen_name: complaintData.citizenName || user.name || 'Anonymous',
+        description: complaintData.description,
+        category: complaintData.category || 'General',
+        location: complaintData.location,
+        status: 'Pending',
+        created_at: serverTimestamp(),
+        history: [{
+          status: 'Pending',
+          note: 'Complaint registered in system',
+          timestamp: Date.now()
+        }]
+      };
+
+      const docRef = await addDoc(collection(db, "complaints"), newComplaint);
+      await fetchComplaints();
+      return { id: docRef.id, ...newComplaint };
+    } catch (error) {
+      console.error("Error adding complaint:", error);
+      return null;
+    }
   };
 
-  const updateStatus = (id, newStatus) => {
-    setComplaints((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              status: newStatus,
-              history: [
-                ...(c.history || []),
-                { status: newStatus, timestamp: now(), note: `Status changed to ${newStatus}` },
-              ],
-            }
-          : c
-      )
-    );
+  // 3. Update Status & Trigger Notification Logic
+  const updateStatus = async (complaintDocId, newStatus) => {
+    try {
+      const complaintRef = doc(db, "complaints", complaintDocId);
+      const complaintSnap = await getDoc(complaintRef);
+      
+      if (!complaintSnap.exists()) return;
+      const complaintData = complaintSnap.data();
+
+      // Update the complaint status and history
+      await updateDoc(complaintRef, {
+        status: newStatus,
+        history: [...(complaintData.history || []), {
+          status: newStatus,
+          note: `Officer updated status to ${newStatus}`,
+          timestamp: Date.now()
+        }]
+      });
+
+      // RELATION LINKAGE: Find the user to notify them
+      const userRef = doc(db, "users", complaintData.user_id);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        console.log(`Ready to notify ${userData.name} at ${userData.email}`);
+        
+        // TRIGGER NOTIFICATION: Call your FastAPI endpoint here
+        // await fetch('http://localhost:8000/send-notification', {
+        //   method: 'POST',
+        //   body: JSON.stringify({ email: userData.email, status: newStatus })
+        // });
+      }
+
+      await fetchComplaints();
+    } catch (error) {
+      console.error("Error updating status:", error);
+    }
   };
 
   return (
-    <ComplaintContext.Provider value={{ complaints, addComplaint, updateStatus }}>
+    <ComplaintContext.Provider value={{ complaints, loading, addComplaint, updateStatus, fetchComplaints }}>
       {children}
     </ComplaintContext.Provider>
   );
