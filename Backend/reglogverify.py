@@ -25,7 +25,7 @@ app.add_middleware(
 CITIZEN_DB = "citizens.db"
 GOVERNMENT_DB = "government.db"
 SMTP_EMAIL = "rajeedandge444@gmail.com" 
-SMTP_PASSWORD = "waad ubak fxou hbyc" 
+SMTP_PASSWORD = "jpiy ukpb lgtu kcxt" 
 
 # Stores OTPs and verification status: { email: { "code": "...", "verified": False, "role": "..." } }
 auth_context = {}
