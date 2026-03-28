@@ -1,20 +1,26 @@
 # --- 1. IMPORTING THE NECESSARY LIBRARY ---
 # Importing the Roboflow SDK to communicate with the cloud-based AI model
 from roboflow import Roboflow 
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # --- 2. CONFIGURATION & CLOUD CONNECTION ---
 # Replace with your actual Private API Key from the Roboflow 'Deploy' tab
-API_KEY = "c5jEmDo5cIPP9Ap3LNJl" 
+API_KEY = os.getenv("ROBOFLOW_API_KEY")
 
 # Creating a connection object 'rf' to log into your Roboflow account
 rf = Roboflow(api_key=API_KEY)
 
 # Selecting your specific project from your workspace
 # Based on your setup: "govt_ai_compliant"
-project = rf.workspace().project("govt_ai_compliant")
+ROBOFLOW_PROJECT = os.getenv("ROBOFLOW_PROJECT")
+project = rf.workspace().project(ROBOFLOW_PROJECT)
 
 # Loading the 'model' object from Version 1 of your project
-model = project.version(1).model
+ROBOFLOW_VERSION = int(os.getenv("ROBOFLOW_VERSION", 1))
+model = project.version(ROBOFLOW_VERSION).model
 
 # --- 3. THE AI SCANNING FUNCTION ---
 # This function takes a local image path (e.g., 'uploads/image.jpg') and scans it

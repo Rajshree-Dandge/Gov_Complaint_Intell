@@ -1,16 +1,76 @@
 # --- 1. IMPORTING LIBRARIES ---
-from fastapi import FastAPI, File, Form, UploadFile,BackgroundTasks
+from fastapi import FastAPI, File, Form, UploadFile, BackgroundTasks, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import sqlite3
 import uvicorn
 import time
 import os
+from datetime import datetime, timedelta
+from typing import Optional
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from cryptography.fernet import Fernet
+from dotenv import load_dotenv
 from detective import run_ai_detection  # AI Verification (Roboflow)
 from priortize import prioritize_complaint  # Categorization & Logic
 from Clustering import get_clusters  # Clustering Logic
 
-# --- 2. APP SETUP ---
+# Load environment variables
+load_dotenv()
+
+# --- 2. SECURITY CONFIGURATION ---
+
+DATABASE_PATH = os.getenv("DATABASE_PATH", "grievance.db")
+SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-government-key")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Encryption Setup (Fernet for PII)
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+if not ENCRYPTION_KEY:
+    raise ValueError("Missing ENCRYPTION_KEY in environment variables")
+cipher_suite = Fernet(ENCRYPTION_KEY.encode())
+
+# Password Hashing Setup
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def encrypt_data(data: str) -> str:
+    """Encrypts a string for database storage."""
+    return cipher_suite.encrypt(data.encode()).decode()
+
+def decrypt_data(data: str) -> str:
+    """Decrypts a string from database retrieval."""
+    return cipher_suite.decrypt(data.encode()).decode()
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        return username
+    except JWTError:
+        raise credentials_exception
+
+# --- 3. APP SETUP ---
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -27,9 +87,9 @@ app.add_middleware(
 # Serve the uploads folder so React can show the images
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# --- 3. DATABASE INITIALIZATION ---
+# --- 4. DATABASE INITIALIZATION ---
 def init_db():
-    conn = sqlite3.connect("grievance.db")
+    conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS complaints(
@@ -81,7 +141,11 @@ async def submit_complaint(
             file_obj.write(content)
 
         # STEP 2: CREATE PENDING RECORD (Immediate Handshake)
-        conn = sqlite3.connect("grievance.db")
+        # ENCRYPT PII BEFORE SAVING (Enterprise Hardening)
+        encrypted_name = encrypt_data(full_name)
+        encrypted_phone = encrypt_data(phone_number)
+
+        conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO complaints (
@@ -89,7 +153,7 @@ async def submit_complaint(
                 text_desc, location, latitude, longitude, ward_zone, image_path, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (
-                full_name, phone_number, language,
+                encrypted_name, encrypted_phone, language,
                 description, location, latitude, longitude, ward_zone, file_loc, 'pending'
             )
         )
@@ -100,7 +164,7 @@ async def submit_complaint(
         # STEP 3: run the back task
         background_tasks.add_task(
             run_task_back, 
-            complaint_id, file_loc, description, location
+            complaint_id, file_loc, description, location, latitude, longitude
         )
        
 
@@ -120,12 +184,12 @@ async def submit_complaint(
 
 
 # adding background task to achieve performance
-async def run_task_back(complaint_id:int,file_loc:str,description:str,location:str):
+async def run_task_back(complaint_id:int,file_loc:str,description:str,location:str,latitude:float,longitude:float):
     try:
         ai_result=run_ai_detection(file_loc)
         if not ai_result.get("detected"):
             # connection
-            conn=sqlite3.connect("grievance.db")
+            conn=sqlite3.connect(DATABASE_PATH)
             # assisstant
             cursor=conn.cursor()
             # execute
@@ -135,61 +199,59 @@ async def run_task_back(complaint_id:int,file_loc:str,description:str,location:s
             # close
             conn.close()
             return
-        logic_result=prioritize_complaint(description,ai_result,location)
+        logic_result=prioritize_complaint(description,ai_result,latitude,longitude,location)
 
         # --- 4. UPDATE DATABASE WITH AI RESULTS ---
-        conn = sqlite3.connect("grievance.db")
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE complaints 
-            SET status='verified', 
-                priority=?, 
-                ai_category=?, 
-                ai_score=?, 
-                latitude=?, 
-                longitude=?
-            WHERE id=?
-        ''',
-        (
-            logic_result['priority'],
-            logic_result['category'],
-            logic_result['score'],
-            logic_result['lat'],
-            logic_result['lon'],
-            complaint_id
-        ))
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.execute('''
+        UPDATE complaints SET 
+        status='verified', 
+        priority=?, 
+        ai_category=?, 
+        ai_score=?, 
+        ward_zone=?  -- This column now stores the resolved Jurisdiction
+        WHERE id=?
+        ''', (logic_result['priority'], logic_result['category'], logic_result['score'], logic_result['jurisdiction'], complaint_id))
+
         conn.commit()
         conn.close()
-
         print(f"Complaint {complaint_id} Verified: {logic_result}")
 
     except Exception as e:
         print(f"Background Task Error: {e}")
 
-# --- 5. GOVT LOGIN (TESTING) ---
+# --- 6. GOVT LOGIN (JWT ENABLED) ---
 @app.post("/login")
 async def login(
-    username: str = Form(...), 
-    password: str = Form(...),
-    ward: str = Form(...) # Now we take the ward during login for testing
+    form_data: OAuth2PasswordRequestForm = Depends()
 ):
-    print(f"Testing Login: {username} accessing {ward}")
+    # Enterprise hardening: Use standard OAuth2 login
+    print(f"Testing SECURE Login: {form_data.username}")
     
-    # Logic: Always return success for testing, but pass back the ward name
+    # In a real app, verify against hashed password in DB
+    # For this task, we return a JWT for any login (mocking success)
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": form_data.username}, expires_delta=access_token_expires
+    )
+    
     return {
+        "access_token": access_token,
+        "token_type": "bearer",
         "status": "success",
-        "user": username,
-        "working_zone": ward, # This tells React which ward to load
-        "message": "Access Granted to " + ward
+        "user": form_data.username,
+        "message": "Access Granted"
     }
-
-from typing import Optional
 
 # Route for Government Officials to view complaints (Filtered by Category and Ward)
 @app.get("/get-complaints")
-async def get_complaints(ward: str, category: str):
+async def get_complaints(
+    ward: str, 
+    category: str,
+    current_user: str = Depends(get_current_user) # Protected by JWT
+):
     try:
-        conn = sqlite3.connect("grievance.db")
+        conn = sqlite3.connect(DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -203,7 +265,25 @@ async def get_complaints(ward: str, category: str):
             ORDER BY ai_score DESC
         ''', (ward, search_term))
         
-        complaints = [dict(row) for row in cursor.fetchall()]
+        rows = cursor.fetchall()
+        complaints = []
+        for row in rows:
+            comp_dict = dict(row)
+            try:
+                # DECRYPT DATA FOR DISPLAY (PII HARDENING)
+                full_name = decrypt_data(comp_dict["full_name"])
+                phone = str(decrypt_data(comp_dict["phone_number"]))
+                
+                # DATA MASKING: Only last 3 digits visible
+                masked_phone = ("*" * (len(phone) - 3)) + phone[-3:]
+                
+                comp_dict["full_name"] = full_name
+                comp_dict["phone_number"] = masked_phone
+            except Exception as e:
+                print(f"Decryption error for record {comp_dict['id']}: {e}")
+            
+            complaints.append(comp_dict)
+            
         conn.close()
         return complaints
     except Exception as e:
@@ -213,7 +293,7 @@ async def get_complaints(ward: str, category: str):
 @app.get("/get-ward-stats")
 async def get_ward_stats(ward: str):
     try:
-        conn = sqlite3.connect("grievance.db")
+        conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
 
         # Logic: Count how many verified complaints exist in each category for this ward
@@ -235,10 +315,15 @@ async def get_ward_stats(ward: str):
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
 @app.get("/get-heatmap")
-async def get_heatmap(ward: str, category: str):
+async def get_heatmap(
+    ward: str, 
+    category: str,
+    current_user: str = Depends(get_current_user) # Protected by JWT
+):
     try:
-        conn = sqlite3.connect("grievance.db")
+        conn = sqlite3.connect(DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -260,6 +345,10 @@ async def get_heatmap(ward: str, category: str):
         return clusters
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.get("/")
+def home():
+    return {"message": "Backend is running!!"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

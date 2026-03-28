@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import './GovernmentLogin.css';
+import axios from 'axios';
 
 export default function GovernmentLogin() {
   const { login, error } = useAuth();
@@ -10,17 +11,41 @@ export default function GovernmentLogin() {
   const [password, setPassword] = useState('');
   const [ward, setWard] = useState('Ward 1');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1. Save EXACTLY what the user typed/selected
-    localStorage.setItem("gov_ward", ward);
-    localStorage.setItem("gov_user", username);
+    try {
+      // 1. Prepare the credentials to send to the Backend
+      const formData = new FormData();
+      formData.append("username", username);
+      formData.append("password", password);
+      formData.append("ward", ward); // Sending the ward so the backend knows where this officer belongs
 
-    console.log("Saved Ward to Storage:", ward); // Check this in console
-    navigate('/gov-landing');
+      // 2. CALL THE LOGIN ENDPOINT (Not get-complaints!)
+      const res = await axios.post("http://127.0.0.1:8000/login", formData);
+
+      // 3. CHECK IF LOGIN WAS SUCCESSFUL
+      if (res.data.status === "success") {
+        // A. Save the "Digital Key" (Token) returned by Python
+        localStorage.setItem("token", res.data.access_token);
+
+        // B. Save the Ward and Username for the UI
+        localStorage.setItem("gov_ward", ward);
+        localStorage.setItem("gov_user", username);
+
+        console.log("Login Successful! Token Saved.");
+
+        // C. Navigate to the landing page now that we are "Authenticated"
+        navigate('/gov-landing');
+      } else {
+        alert("Login Failed: " + res.data.message);
+      }
+
+    } catch (err) {
+      console.error("Auth Error:", err);
+      alert("Could not connect to Government Auth Server.");
+    }
   };
-
   return (
     <div className="login-page">
       <div className="login-card">

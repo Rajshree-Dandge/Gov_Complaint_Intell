@@ -43,23 +43,40 @@ export default function CitizenComplaint() {
   const requestLocation = () => {
     const geoOptions = {
       enableHighAccuracy: true,
-      timeout: 8000,
+      timeout: 10000,
       maximumAge: 0
     };
 
     if ("geolocation" in navigator) {
-      // 1. This triggers the native browser prompt (near the search bar)
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // If allowed
-          setCoords({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setCoords({ latitude, longitude });
           setShowModal(false);
+
+          // Reverse Geocoding with OpenStreetMap Nominatim
+          try {
+            const res = await axios.get(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
+            );
+            
+            if (res.data && res.data.address) {
+              const addr = res.data.address;
+              // Extract street/area and ward/zone
+              const street = addr.road || addr.suburb || addr.neighbourhood || addr.village || "Unknown Area";
+              const ward = addr.city_district || addr.suburb || addr.postcode || "General Zone";
+
+              setForm(prev => ({
+                ...prev,
+                location: street,
+                ward: ward
+              }));
+            }
+          } catch (err) {
+            console.error("Reverse Geocoding failed:", err);
+          }
         },
         (error) => {
-          // 2. If blocked/denied, show the custom dark modal
           console.error("Browser location blocked or failed.");
           setShowModal(true);
         },
@@ -233,13 +250,31 @@ export default function CitizenComplaint() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Location (Area Name) <span className="required">*</span></label>
-              <input name="location" value={form.location} onChange={handleChange} placeholder="Street/Area" />
+              <label>
+                Location (Area Name) <span className="required">*</span>
+                {form.location && <span className="gps-verified-badge">📍 GPS Verified</span>}
+              </label>
+              <input 
+                name="location" 
+                value={form.location} 
+                onChange={handleChange} 
+                placeholder="Auto-detecting location..." 
+                readOnly={!!coords.latitude}
+              />
               {errors.location && <span className="error">{errors.location}</span>}
             </div>
             <div className="form-group">
-              <label>Ward / Zone</label>
-              <input name="ward" value={form.ward} onChange={handleChange} placeholder="e.g. Ward 5" />
+              <label>
+                Ward / Zone
+                {form.ward && <span className="gps-verified-badge">📍 GPS Verified</span>}
+              </label>
+              <input 
+                name="ward" 
+                value={form.ward} 
+                onChange={handleChange} 
+                placeholder="Auto-detecting ward..." 
+                readOnly={!!coords.latitude}
+              />
             </div>
           </div>
         </div>
