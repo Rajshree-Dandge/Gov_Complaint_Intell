@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import axios from 'axios';
 import './AuthPage.css';
 
 export default function GovSignup() {
@@ -41,7 +42,7 @@ export default function GovSignup() {
     else setError('File must be under 10MB');
   };
 
-  // Trigger Backend to send OTP
+  // Systems Architect: OTP Decoupling with Axios Fail-Fast
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!form.email || !form.name || !form.phone) {
@@ -52,32 +53,29 @@ export default function GovSignup() {
     setSubmitting(true);
     setError('');
     try {
-      const response = await fetch('http://localhost:8000/api/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+      const response = await axios.post('http://localhost:8000/api/send-otp', { 
           email: form.email.trim(),
           name: form.name.trim(),
           role: 'government',
           is_signup: true 
-        }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail || 'Failed to send OTP');
+        }, { timeout: 15000 });
 
       setOtpSent(true);
       setOtpTimer(60); 
       setSuccessMsg('A 6-digit verification code has been sent to your email.');
     } catch (err) {
-      setError(err.message);
+        if (err.code === 'ECONNABORTED') {
+            setError('Connection Timed Out. Please Retry.');
+        } else {
+            setError(err.response?.data?.detail || err.message);
+        }
     } finally {
       setSubmitting(false);
     }
   };
 
   
-  // Verify the OTP
+  // Systems Architect: Sub-second Verification handshake
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     if (otp.length < 6) return setError('Enter the 6-digit code');
@@ -85,20 +83,20 @@ export default function GovSignup() {
     setSubmitting(true);
     setError('');
     try {
-      const verifyRes = await fetch('http://localhost:8000/api/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email.trim(), code: otp.trim() }),
-      });
-
-      const result = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(result.detail || 'Invalid or expired OTP');
+      const verifyRes = await axios.post('http://localhost:8000/api/verify-otp', { 
+          email: form.email.trim(), 
+          code: otp.trim() 
+      }, { timeout: 15000 });
 
       setIsVerified(true);
       setStep('details'); 
       setSuccessMsg('Email verified successfully!');
     } catch (err) {
-      setError(err.message);
+        if (err.code === 'ECONNABORTED') {
+            setError('Verification Timed Out. Please Retry.');
+        } else {
+            setError(err.response?.data?.detail || err.message);
+        }
     } finally {
       setSubmitting(false);
     }
@@ -123,24 +121,19 @@ export default function GovSignup() {
       formData.append('admin_role', form.admin_role);
       formData.append('proof', proofFile);
 
-      const response = await fetch('http://localhost:8000/register/government', { 
-      method: 'POST',
-      body: formData,
-    });
-
-
-      const result = await response.json();
+      const response = await axios.post('http://localhost:8000/register/government', formData, { 
+          timeout: 15000,
+          headers: { 'Content-Type': 'multipart/form-data' }
+      });
       
-      if (!response.ok) {
-        // Handle FastAPI validation errors (422) clearly
-        const errorDetail = result.detail;
-        throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Registration failed: Check all fields');
-      }
-
       setSuccessMsg('Registration submitted! Awaiting admin approval.');
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
-      setError(err.message); // Fixes [object Object] by ensuring it's a string
+        if (err.code === 'ECONNABORTED') {
+            setError('Submission Timed Out. High traffic detected. Please Retry.');
+        } else {
+            setError(err.response?.data?.detail || err.message);
+        }
     } finally {
       setSubmitting(false);
     }
@@ -157,8 +150,32 @@ export default function GovSignup() {
           <p>Verify your official identity to proceed</p>
         </div>
 
-        {error && <div className="auth-error">{error}</div>}
-        {successMsg && <div className="auth-success">{successMsg}</div>}
+        {error && (
+            <div className="auth-error" style={error.includes('Timed Out') ? {background: '#FF0000', color: '#fff', border: 'none', fontWeight: 'bold'} : {}}>
+                {error}
+                {error.includes('Timed Out') && (
+                    <button 
+                        type="button" 
+                        style={{
+                            display: 'block', 
+                            width: '100%',
+                            marginTop: '0.75rem', 
+                            padding: '0.5rem',
+                            background: '#10B981', 
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer'
+                        }} 
+                        onClick={() => setError('')}
+                    >
+                        RETRY CONNECTION
+                    </button>
+                )}
+            </div>
+        )}
+        {successMsg && <div className="auth-success" style={{background: '#ECFDF5', color: '#065F46', borderLeft: '4px solid #10B981'}}>{successMsg}</div>}
 
         {/* STEP 1: VERIFICATION */}
         {step === 'verification' ? (

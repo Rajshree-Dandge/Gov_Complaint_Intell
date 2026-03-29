@@ -23,6 +23,16 @@ import './AdminOnboarding.css';
  * The Initialization Wizard has been refactored for "Digital Sunlight" UI.
  * It provides a smooth, animated progressive handshake with the backend.
  */
+const OnboardingProgressBar = ({ progress }) => {
+  return (
+    <div className="progress-container">
+      <div className="progress-bar-fill" style={{ width: `${progress}%` }}>
+        <div className="progress-glow"></div>
+      </div>
+    </div>
+  );
+};
+
 const AdminOnboarding = () => {
   const { user, login } = useAuth();
   const navigate = useNavigate();
@@ -178,6 +188,28 @@ const AdminOnboarding = () => {
               <h2>The Nivaran Transformation</h2>
               <p>Witness the impact of AI-driven governance.</p>
             </div>
+            
+            {/* GOVERNANCE MOULDING: AI Optimized Suggestion */}
+            <div className="ai-suggestion-box">
+              <div className="suggestion-header">
+                <Bot size={20} />
+                <span>AI Optimized Operational Suggestion</span>
+              </div>
+              <div className="suggestion-content">
+                {formData.bodyType === 'Gram Panchayat' ? (
+                  <div className="suggestion-item">
+                    <h4>Mould: Flat Dispatch Model</h4>
+                    <p>Since you are a {formData.bodyType}, we recommend a Direct-to-Worker dispatch to minimize bureaucratic lag. AI will skip secondary desk verification.</p>
+                  </div>
+                ) : (
+                  <div className="suggestion-item">
+                    <h4>Mould: Hierarchical Triage</h4>
+                    <p>Given the scale of {formData.bodyType}, we recommend multi-stage verification. AI will prioritize for Desk Officers before field dispatch.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="comparison-grid">
               <div className="comparison-card old">
                 <h3 className="card-title">Legacy System</h3>

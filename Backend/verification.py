@@ -27,14 +27,25 @@ def send_email(target, subject, body):
     msg['From'] = SMTP_EMAIL
     msg['To'] = target
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(SMTP_EMAIL, SMTP_PASSWORD)
+        # SYSTEMS ARCHITECT: Robust SMTP Pipeline with TLS & Handshake Timeout
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
+        server.set_debuglevel(1)  # Enable debug for logging SMTP codes
+        server.starttls()  # Upgrade connection to secure TLS
+        
+        try:
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"SMTP AUTH ERROR {e.smtp_code}: {e.smtp_error} - Verify Gmail App Password.")
+            return False
+            
         server.send_message(msg)
         server.quit()
         return True
+    except smtplib.SMTPConnectError as e:
+        print(f"SMTP CONNECTION REFUSED {e.smtp_code}: {e.smtp_error} - Check host/port.")
+        return False
     except Exception as e:
-        print(f"Mail Error: {e}")
+        print(f"Nivaran Mail Engine Error: {e}")
         return False
 
 # --- MODELS ---

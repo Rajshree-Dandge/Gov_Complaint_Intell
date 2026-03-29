@@ -30,8 +30,8 @@ def get_clusters(complaints):
             "lon": avg_lon,
             "severity": max_severity,
             "count": count,
-            # Bivariate Logic: Map severity to a color string
-            "color": "red" if max_severity >= 8 else "orange" if max_severity >= 5 else "yellow"
+            # Weighted Triage Logic: Mapping to Newspaper-defined non-verbal signals
+            "color": "#EF4444" if max_severity >= 7.5 else "#F59E0B" if max_severity >= 4.0 else "#10B981"
         })
     
     return clusters

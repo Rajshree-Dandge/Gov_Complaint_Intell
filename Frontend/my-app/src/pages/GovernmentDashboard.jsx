@@ -6,16 +6,16 @@ import 'leaflet/dist/leaflet.css';
 import './GovernmentDashboard.css';
 import { useAuth } from '../context/AuthContext';
 import { 
-  Shield, 
-  Users, 
-  Map as MapIcon, 
-  Activity, 
-  Zap, 
-  ChevronLeft, 
   Bot, 
-  AlertTriangle, 
-  TrendingUp,
-  Briefcase
+  Map as MapIcon, 
+  ChevronLeft, 
+  Clock,
+  Camera,
+  CheckCircle2,
+  AlertOctagon,
+  Calendar,
+  User,
+  Zap
 } from 'lucide-react';
 
 // --- 0. DYNAMIC CENTER CONTROLLER ---
@@ -51,70 +51,24 @@ const CountdownTimer = ({ deadline }) => {
   }, [deadline]);
 
   return (
-    <div className={`timer-widget ${timeLeft === 'OVERDUE' ? 'overdue' : ''}`}>
-      <span>⏳</span> {timeLeft}
+    <div className={`timer-widget ${timeLeft === 'OVERDUE' ? 'overdue' : ''}`} style={{fontFamily: 'JetBrains Mono', fontSize: '0.8rem', fontWeight: 800}}>
+      {timeLeft !== 'OVERDUE' && '⌛'} {timeLeft}
     </div>
   );
 };
 
-// --- 2. AI ADVISOR COMPONENT ---
-const AIAdvisor = ({ complaintsCount, fieldWorkers }) => {
-    const ratio = complaintsCount / (fieldWorkers || 1);
-    let message = "AI Suggestion: Resources are currently optimal.";
-    
-    if (ratio > 5) {
-        message = `AI Suggestion: Critical Load. Reassign 3 workers from Ward Y to clear high-risk hotspots.`;
-    } else if (ratio > 2) {
-        message = `AI Suggestion: Alert. Reassign 2 workers to Ward X to clear red zone hotspots.`;
-    } else {
-        message = `AI Suggestion: Proactive Maintenance. Verify completed tasks to optimize workforce latency.`;
-    }
-
-    return (
-        <div className="ai-advisor">
-            <div className="ai-icon">
-                <Bot size={32} />
-            </div>
-            <div className="ai-text">
-                <h4>Sovereign Intelligence Unit</h4>
-                <p>{message}</p>
-            </div>
-        </div>
-    );
-};
-
 export default function GovDashboard() {
-  const { category } = useParams(); // e.g., "Roads & Infrastructure"
-  const navigate = useNavigate();
-  const { isBodyAdmin, adminRole } = useAuth();
+  const { category } = useParams();
+  const { user, isAuthenticated } = useAuth();
   
   const [complaints, setComplaints] = useState([]);
   const [clusters, setClusters] = useState([]);
   const [systemConfig, setSystemConfig] = useState({});
-  const [stats, setStats] = useState({ total: 0, remaining: 0, resolved: 0, latency: '3.8h' });
   const [loading, setLoading] = useState(true);
-  const [mapCenter, setMapCenter] = useState([19.0760, 72.8777]);
+  const [mapCenter, setMapCenter] = useState([17.1475, 73.2685]);
 
-  const officerWard = localStorage.getItem("gov_ward") || "Ward 5";
-
-  // Parse worker mapping from systemConfig
-  const workerMapping = useMemo(() => {
-    if (systemConfig.category_mapping) {
-        try {
-            return JSON.parse(systemConfig.category_mapping);
-        } catch (e) { return {}; }
-    }
-    return {};
-  }, [systemConfig]);
-
-  const fieldWorkersCount = parseInt(workerMapping.field_workers) || 10;
-
-  // --- 2. INTELLIGENT TRIAGE LOGIC (Public Risk Index Labels) ---
-  const getPriorityInfo = (score) => {
-    if (score >= 7.5) return { label: 'CRITICAL', class: 'prio-dangerous' };
-    if (score >= 4.0) return { label: 'ELEVATED', class: 'prio-moderate' };
-    return { label: 'STABLE', class: 'prio-neutral' };
-  };
+  const officerWard = user?.ward || localStorage.getItem("gov_ward") || "Ganpatipule GP";
+  const currentDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
   const fetchData = async () => {
     try {
@@ -134,16 +88,8 @@ export default function GovDashboard() {
       if (complaintsRes.data?.length > 0) {
           setMapCenter([complaintsRes.data[0].latitude, complaintsRes.data[0].longitude]);
       }
-
-      const resolved = (complaintsRes.data || []).filter(c => c.status === 'resolved').length;
-      setStats(prev => ({
-        ...prev,
-        total: complaintsRes.data?.length || 0,
-        remaining: (complaintsRes.data?.length || 0) - resolved,
-        resolved: resolved
-      }));
     } catch (err) {
-      console.error("War Room Sync Error:", err);
+      console.error("Newspaper Fetch Error:", err);
     } finally {
       setLoading(false);
     }
@@ -153,161 +99,206 @@ export default function GovDashboard() {
     fetchData();
   }, [category, officerWard]);
 
-  if (loading) return (
-    <div className="war-room-loader">
-        <Bot size={48} className="pulse-ai" />
-        <span>Syncing Nivaran Sovereign Pipeline...</span>
-    </div>
-  );
+  const handleIssueJobCard = async (id) => {
+    try {
+        const token = localStorage.getItem('token');
+        await axios.post(`http://127.0.0.1:8000/api/v1/complaints/${id}/issue-job-card`, {}, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        fetchData(); // Refresh
+    } catch (err) {
+        console.error("Dispatch Error:", err);
+    }
+  };
 
+  const handleResolve = async (id, file) => {
+    if (!file) return;
+    try {
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('after_photo', file);
+        
+        await axios.patch(`http://127.0.0.1:8000/resolve-grievance/${id}`, formData, {
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        fetchData(); // Refresh
+    } catch (err) {
+        console.error("Resolution Error:", err);
+    }
+  };
+
+  const getSeverityBadge = (score) => {
+    if (score >= 7.5) return <span className="severity-badge badge-dangerous">PUBLIC RISK INDEX: {score} (CRITICAL)</span>;
+    if (score >= 4.0) return <span className="severity-badge badge-moderate">PUBLIC RISK INDEX: {score} (MODERATE)</span>;
+    return <span className="severity-badge badge-neutral">PUBLIC RISK INDEX: {score} (NEUTRAL)</span>;
+  };
+
+  if (loading) return <div className="war-room-loader"><span>Typesetting The News...</span></div>;
+
+  const activeComplaints = complaints.filter(c => c.status !== 'resolved');
+  const resolvedComplaints = complaints.filter(c => c.status === 'resolved');
+  const topStory = activeComplaints.reduce((prev, current) => (prev.ai_score > current.ai_score) ? prev : current, activeComplaints[0]);
+  
   const scope = systemConfig.administrative_scope || 'Municipal Corporation';
+  const isPanchayat = scope === 'Gram Panchayat';
+  
+  // DYNAMIC ARCHITECT: ADMINISTRATIVE LABELS (THE MORNING NEWSPAPER MOULD)
+  const dashboardTitle = isPanchayat ? "Village Governance Live: Ganpatipule Command" : "City Intelligence Live";
+  const departmentLabel = isPanchayat ? 'Work Units' : 'Administrative Domain';
+  const severityLabel = isPanchayat ? "Village Risk Index" : "Public Risk Index";
+  const officerLabel = isPanchayat ? "Field Team" : "Officer Identity";
 
   return (
     <div className="dashboard-wrapper">
-      {/* --- SIDEBAR: EXECUTIVE STATS --- */}
-      <aside className="gov-sidebar">
-        <div className="sidebar-brand">
-          <div className="emblem"><Bot size={40} color="#3B82F6" /></div>
-          <h3>War Room</h3>
-          <small style={{color: 'var(--accent-blue)', fontWeight: 800}}>{adminRole}</small>
+      {/* --- NEWSPAPER HEADER --- */}
+      <header className="newspaper-header" style={{fontFamily: 'Inter, sans-serif'}}>
+        <div className="header-top">
+            <span>Vol. 2026 - Digital Edition</span>
+            <span><Calendar size={14} style={{verticalAlign: 'middle'}}/> {currentDate}</span>
+            <span><User size={14} style={{verticalAlign: 'middle'}}/> {officerLabel}: Verified</span>
         </div>
-
-        <div className="stat-group">
-          <div className="stat-box">
-            <small>Active Domain Load</small>
-            <h2>{stats.total}</h2>
-          </div>
-          <div className="stat-box">
-            <small>Pending Tasks</small>
-            <h2 style={{color: 'var(--accent-red)'}}>{stats.remaining}</h2>
-          </div>
-          <div className="stat-box">
-            <small>Resolution Rate</small>
-            <h2 style={{color: 'var(--accent-emerald)'}}>{stats.total > 0 ? ((stats.resolved/stats.total)*100).toFixed(1) : 0}%</h2>
-          </div>
-          <div className="stat-box">
-            <small>Avg. Latency</small>
-            <h2>{stats.latency}</h2>
-          </div>
+        <h1 className="newspaper-title" style={{letterSpacing: '-2px'}}>{dashboardTitle}</h1>
+        <div className="header-bottom" style={{borderTop: '2px solid #000', padding: '0.75rem 0', display: 'flex', justifyContent: 'center', gap: '2rem', fontWeight: 800}}>
+            <span>🏛️ BODY: {scope.toUpperCase()}</span>
+            <span>📍 SECTOR: {officerWard.toUpperCase()}</span>
+            <span>🧠 TRIAGE ROLE: {category || 'GENERAL'}</span>
         </div>
+      </header>
 
-        {isBodyAdmin && (
-            <div className="admin-moulding-panel">
-                <button className="btn-act" style={{width: '100%', marginTop: 'auto'}} onClick={() => navigate('/onboarding')}>
-                    Mould Pipeline
-                </button>
-            </div>
-        )}
-      </aside>
-
-      {/* --- MAIN DASHBOARD: Adaptive Layout --- */}
-      <main className="gov-main">
-        <header className="layout-header">
-           <button className="btn-back" onClick={() => navigate('/gov-landing')} style={{background: 'transparent', border: 'none', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600}}>
-             <ChevronLeft size={18} /> Stand Down
-           </button>
-           <div className="ward-indicator" style={{background: '#eff6ff', color: '#3b82f6', padding: '0.5rem 1.25rem', borderRadius: '99px', fontWeight: 800, fontSize: '0.85rem'}}>
-             📍 {scope} | {officerWard}
-           </div>
-        </header>
-
-        <AIAdvisor complaintsCount={stats.remaining} fieldWorkers={fieldWorkersCount} />
-
-        {/* MOULDING LOGIC: Gram Panchayat (Task-Oriented) vs Municipal (Data-Oriented) */}
-        {scope === 'Gram Panchayat' ? (
-            <div className="onboarding-stage">
-                <div className="section-title" style={{marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                    <Briefcase size={20} color="#10B981" /> <h3>Workforce Priority Queue</h3>
+      <div className="newspaper-body">
+        {/* --- MAIN COLUMN: TOP STORY & AUDIT --- */}
+        <main className="top-story">
+          {topStory ? (
+            <>
+                <div className="headline-wrap">
+                    {getSeverityBadge(topStory.ai_score)}
+                    <h2 className="headline-large">{topStory.location}: {topStory.text_desc.split('.')[0]}</h2>
                 </div>
-                <div className="worker-cards-grid">
-                    {complaints.length > 0 ? complaints.map((item) => {
-                        const prio = getPriorityInfo(item.ai_score);
-                        return (
-                            <div key={item.id} className="worker-card">
-                                <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '1rem'}}>
-                                    <span className={`badge ${prio.class}`}>{prio.label} RISK</span>
-                                    <CountdownTimer deadline={item.deadline_at} />
-                                </div>
-                                <h4 style={{margin: '0 0 0.5rem 0'}}>{item.location}</h4>
-                                <p style={{fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem'}}>{item.text_desc.substring(0, 100)}...</p>
-                                <button className="btn-act" style={{width: '100%'}} onClick={() => window.open(`http://127.0.0.1:8000/${item.image_path}`)}>
-                                    Scan Proof
-                                </button>
-                            </div>
-                        )
-                    }) : (
-                        <div className="stat-box" style={{gridColumn: 'span 3', textAlign: 'center', padding: '3rem'}}>
-                            <Bot size={40} color="#e2e8f0" style={{marginBottom: '1rem'}} />
-                            <p>No active tasks in the sovereign queue.</p>
+                <div className="featured-image-wrap">
+                    <img src={`http://127.0.0.1:8000/${topStory.image_path}`} alt="Evidence" className="featured-image" />
+                    <div className="ai-truth-tag">📍 TRUTH VERIFIED BY AI</div>
+                </div>
+                <p className="story-content" style={{fontSize: '1.2rem', lineHeight: '1.6', columnCount: 2, columnGap: '2rem', textAlign: 'justify'}}>
+                    {topStory.text_desc} In a sovereign verification scan, this issue has been flagged with a {severityLabel} of {topStory.ai_score}. 
+                    Immediate intervention is recommended for this area in {topStory.ward_zone}.
+                    <br /><br />
+                    The {departmentLabel} has been alerted to this {topStory.ai_category} case. 
+                    {topStory.status === 'assigned' ? (
+                        <div className="dispatch-confirmation" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                           <span>🚩 BATTLE-READY DISPATCH. RESOLUTION TRACKER IS LIVE.</span>
+                           <label className="btn-resolve" style={{cursor: 'pointer', padding: '0.5rem 1rem', background: '#10b981', color: '#fff', borderRadius: '4px', fontWeight: 900}}>
+                              MARK AS RESOLVED
+                              <input type="file" style={{display: 'none'}} onChange={(e) => handleResolve(topStory.id, e.target.files[0])} />
+                           </label>
                         </div>
+                    ) : (
+                        <button className="btn-issue" onClick={() => handleIssueJobCard(topStory.id)}>Issue Sovereignty Job Card</button>
                     )}
-                </div>
+                </p>
+            </>
+          ) : (
+            <div style={{textAlign: 'center', padding: '5rem'}}>
+                <h2 className="headline-large">All Quiet in {officerWard}</h2>
+                <p>No active grievances matching the triage criteria.</p>
             </div>
-        ) : (
-            <div className="onboarding-stage data-grid">
-                <div className="dashboard-card" style={{gridColumn: 'span 1'}}>
-                    <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem'}}>
-                        <MapIcon size={20} color="#3B82F6" /> <h4 style={{margin:0}}>Sovereign Triage Map</h4>
-                    </div>
-                    <div className="map-container-wrapper">
-                        <MapContainer center={mapCenter} zoom={13} className="leaflet-container">
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                        <MapController center={mapCenter} />
+          )}
 
-                        {clusters.map((cluster, idx) => (
-                            <CircleMarker
-                            key={idx}
-                            center={[cluster.lat, cluster.lon]}
-                            radius={cluster.severity >= 7.5 ? 25 : 15}
-                            pathOptions={{
-                                fillColor: cluster.severity >= 7.5 ? '#EF4444' : '#3B82F6',
-                                color: cluster.severity >= 7.5 ? '#EF4444' : '#3B82F6',
-                                fillOpacity: 0.6,
-                                weight: 2
-                            }}
-                            >
-                            <Popup>
-                                <strong>Zone Intelligence</strong><br />
-                                Public Risk Index: {cluster.severity.toFixed(1)}/10<br />
-                                Verified Items: {cluster.count}
-                            </Popup>
-                            </CircleMarker>
-                        ))}
-                        </MapContainer>
+          {/* VISUAL AUDIT SECTION */}
+          <section className="visual-audit-section">
+            <h3 className="sidebar-title" style={{fontSize: '2rem'}}>Visual Audit: Promises Kept</h3>
+            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '2rem'}}>
+                {resolvedComplaints.map(item => (
+                    <div key={item.id} className="audit-item">
+                        <h4 style={{fontFamily: 'Playfair Display', marginBottom: '0.5rem'}}>{item.location} - {item.ai_category}</h4>
+                        <div className="audit-grid">
+                            <div className="audit-card">
+                                <img src={`http://127.0.0.1:8000/${item.image_path}`} alt="Before" className="audit-img" />
+                                <div className="audit-label">Before: Neglect</div>
+                            </div>
+                            <div className="audit-card">
+                                <img src={`http://127.0.0.1:8000/uploads/resolutions/test_fixed.jpg`} alt="After" className="audit-img" />
+                                <div className="audit-label" style={{color: 'var(--accent-emerald)'}}>After: Governance</div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-
-                <div className="dashboard-card">
-                    <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem'}}>
-                        <Activity size={20} color="#F59E0B" /> <h4 style={{margin:0}}>Priority Triage</h4>
-                    </div>
-                    <table className="triage-table">
-                        <thead>
-                        <tr>
-                            <th>Risk Index</th>
-                            <th>Countdown</th>
-                            <th>Intelligence</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {complaints.slice(0, 6).map((item) => {
-                            const prio = getPriorityInfo(item.ai_score);
-                            return (
-                            <tr key={item.id}>
-                                <td><span className={`badge ${prio.class}`}>{prio.label}</span></td>
-                                <td><CountdownTimer deadline={item.deadline_at} /></td>
-                                <td>
-                                <button className="btn-act" onClick={() => window.open(`http://127.0.0.1:8000/${item.image_path}`)}>Proof</button>
-                                </td>
-                            </tr>
-                            );
-                        })}
-                        </tbody>
-                    </table>
-                </div>
+                ))}
             </div>
-        )}
-      </main>
+          </section>
+        </main>
+
+        {/* --- SIDEBAR: TRIAGE & MAP --- */}
+        <aside className="newspaper-sidebar">
+          <div className="briefing-box">
+            <h3 className="sidebar-title">Active Briefing</h3>
+            <ul className="triage-list">
+                {activeComplaints.slice(1, 10).map(item => (
+                    <li key={item.id} className="triage-item">
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                            <div>
+                                {getSeverityBadge(item.ai_score)}
+                                <h4 style={{fontFamily: 'Playfair Display', margin: '0.25rem 0'}}>{item.location}</h4>
+                                <small style={{color: '#64748b'}}>{item.ai_category}</small>
+                            </div>
+                            <CountdownTimer deadline={item.deadline_at} />
+                        </div>
+                        {item.status === 'assigned' ? (
+                            <label className="btn-resolve" style={{fontSize: '0.7rem', padding: '0.4rem', marginTop: '0.5rem', background: '#10b981', color: '#fff', display: 'inline-block', borderRadius: '4px', fontWeight: 900, cursor: 'pointer'}}>
+                                 MARK RESOLVED
+                                <input type="file" style={{display: 'none'}} onChange={(e) => handleResolve(item.id, e.target.files[0])} />
+                            </label>
+                        ) : (
+                            <button className="btn-issue" style={{fontSize: '0.7rem', padding: '0.4rem', marginTop: '0.5rem'}} onClick={() => handleIssueJobCard(item.id)}>Issue Card</button>
+                        )}
+                    </li>
+                ))}
+            </ul>
+          </div>
+
+          <div className="briefing-box leaderboard-widget">
+             <h3 className="sidebar-title">Sovereign Performance</h3>
+             <div className="leaderboard-item">
+                <span className="worker-rank">#1</span>
+                <div className="worker-info">
+                    <strong>Rahul Patil (Field Team Lead)</strong>
+                    <p>4 Verified Fixes this week</p>
+                </div>
+                <div className="score-badge">EXCEPTIONAL</div>
+             </div>
+          </div>
+
+          <div className="briefing-box">
+             <h3 className="sidebar-title">Hotspot Triage</h3>
+             <div className="newspaper-map-container">
+                <MapContainer center={mapCenter} zoom={13} style={{height: '100%', background: '#F0F9FF'}}>
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <MapController center={mapCenter} />
+                    {clusters.map((cluster, idx) => (
+                        <CircleMarker
+                        key={idx}
+                        center={[cluster.lat, cluster.lon]}
+                        radius={cluster.severity >= 7.5 ? 25 : 15}
+                        pathOptions={{
+                            fillColor: cluster.color,
+                            color: cluster.color,
+                            fillOpacity: 0.6,
+                            weight: 2,
+                            className: cluster.severity >= 7.5 ? 'visual-bloom-pulse' : ''
+                        }}
+                        >
+                        <Popup>
+                            <strong>Administrative Hotspot</strong><br />
+                            {severityLabel}: {cluster.severity.toFixed(1)}/10
+                        </Popup>
+                        </CircleMarker>
+                    ))}
+                </MapContainer>
+             </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

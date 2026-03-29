@@ -121,7 +121,7 @@ export default function CitizenComplaint() {
         name: form.citizenName,
         role: "citizen",
         is_signup: true
-      });
+      }, { timeout: 30000 });
       setOtpSent(true);
       alert("OTP sent to your email!");
     } catch (err) {
@@ -137,7 +137,7 @@ export default function CitizenComplaint() {
       const res = await axios.post("http://127.0.0.1:8000/api/verify-otp", {
         email: form.email,
         code: form.otp
-      });
+      }, { timeout: 30000 });
       if (res.data.status === "success") {
         setOtpVerified(true);
         alert("Email verified successfully!");
@@ -191,7 +191,7 @@ export default function CitizenComplaint() {
       setTimeout(() => setPipelineStep(2), 1500);
       setTimeout(() => setPipelineStep(3), 3000);
 
-      const res = await axios.post("http://127.0.0.1:8000/submit-complaint", formData);
+      const res = await axios.post("http://127.0.0.1:8000/submit-complaint", formData, { timeout: 30000 });
 
       if (res.data.status === "success") {
         setPipelineStep(4);

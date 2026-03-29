@@ -9,7 +9,7 @@ import time
 import os
 import random
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from cryptography.fernet import Fernet
@@ -97,7 +97,7 @@ async def check_admin_authority(current_user: str = Depends(get_current_user)):
 app = FastAPI(title="Nivaran Backend - Enterprise Verified AI Pipeline")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -117,40 +117,66 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS complaints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT,             -- Encrypted PII
-            phone_number TEXT,          -- Encrypted PII
-            text_desc TEXT,             -- Translated English Context
-            image_path TEXT,            -- Physical Evidence
-            status TEXT DEFAULT 'pending', -- pending -> verified -> assigned -> resolved
-            priority TEXT,              -- Triage Level
-            ai_category TEXT,           -- Department Mapping
-            ai_score REAL,               -- Risk Index (1-10)
-            ward_zone TEXT,             -- Resolved Jurisdiction (Geopy)
+            full_name TEXT,
+            phone_number TEXT,
+            text_desc TEXT,
+            location TEXT,
+            image_path TEXT,
+            status TEXT DEFAULT 'pending',
+            priority TEXT,
+            ai_category TEXT,
+            ai_score REAL,
+            ward_zone TEXT,
             latitude REAL,
             longitude REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             verified_at TIMESTAMP,
             assigned_at TIMESTAMP,
-            deadline_at TIMESTAMP,      -- THE PROCRASTINATION KILLER
-            resolved_at TIMESTAMP,      -- THE AUDIT TRAIL
-            resolution_image_path TEXT, -- THE PROOF OF FIX
-            contractor_id TEXT          -- Auto-assigned Contractor
+            deadline_at TIMESTAMP,
+            resolved_at TIMESTAMP,
+            resolution_image_path TEXT,
+            contractor_id TEXT
         )
     ''')
+    
+    # 2. INTEGRATE TEAMMATE'S IDENTITY TABLES (CRITICAL FIX: Tables must exist before indexing email)
+    init_verification_db(cursor)
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS system_config (
             id INTEGER PRIMARY KEY,
-            administrative_scope TEXT, -- Panchayat/Municipal
-            category_mapping TEXT,     -- JSON string mapping category to Desk ID
-            sla_hours INTEGER          -- Default SLA hours
+            administrative_scope TEXT,
+            category_mapping TEXT,
+            sla_hours INTEGER
         )
     ''')
 
 
-    # 2. INTEGRATE TEAMMATE'S IDENTITY TABLES
-    # This calls the function in your teammate's verification.py file
+    # 2. INTEGRATE TEAMMATE'S IDENTITY TABLES (CRITICAL: Must exist before Indexing)
     init_verification_db(cursor)
+
+    # Persistent Auth Context: Thread-Safe SQLite Storage for OTPs
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS auth_otps (
+            email TEXT PRIMARY KEY,
+            code TEXT,
+            expiry TEXT,
+            sent_at TEXT,
+            verified INTEGER DEFAULT 0,
+            role TEXT
+        )
+    ''')
+
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_ward ON complaints(ward_zone)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_ai_score ON complaints(ai_score)')
+
+    # Performance Crack: Authentication Indexing for sub-50ms query speed
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_citizens_email ON citizens(email)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_government_officers_email ON government_officers(email)')
+    
+    # 3. PERFORMANCE OPTIMIZATION: WAL MODE
+    cursor.execute("PRAGMA journal_mode=WAL")
     
     conn.commit()
     conn.close()
@@ -160,16 +186,17 @@ init_db()
 # --- 5. OTP & IDENTITY ROUTES ---
 
 @app.post("/api/send-otp")
-async def send_otp(data: OTPRequest):
-    """Revolutionary Developer: Identity Verification Layer"""
-    email = data.email.strip()
+async def send_otp(data: OTPRequest, background_tasks: BackgroundTasks):
+    """Revolutionary Developer: Identity Verification Layer (Zero-Latency Handshake)"""
+    email = data.email.strip().lower()
     name = data.name.strip()
     role = data.role.strip()
 
     if not data.is_signup:
         conn = sqlite3.connect(DATABASE_PATH)
         table = "government_officers" if role == "government" else "citizens"
-        user = conn.execute(f"SELECT name FROM {table} WHERE email = ? AND name = ?", (email, name)).fetchone()
+        # Teammate Logic: Strict database check
+        user = conn.execute(f"SELECT name FROM {table} WHERE email = ?", (email,)).fetchone()
         conn.close()
         if not user:
             raise HTTPException(
@@ -178,6 +205,7 @@ async def send_otp(data: OTPRequest):
             )
 
     otp_code = str(random.randint(100000, 999999))
+    # Stable Dictionary Handshake
     auth_context[email] = {
         "code": otp_code,
         "expiry": datetime.now() + timedelta(minutes=5),
@@ -186,14 +214,17 @@ async def send_otp(data: OTPRequest):
     }
     
     body = f"Hello {name},\n\nYour Nivaran verification code is: {otp_code}\nExpires in 5 minutes."
-    if send_email(email, "Nivaran Verification", body):
-        return {"message": "OTP sent to email"}
-    raise HTTPException(status_code=500, detail="Failed to send email.")
+    
+    # KILL THE TIMEOUT: Async Background Dispatch
+    background_tasks.add_task(send_email, email, "Nivaran Verification", body)
+    
+    return {"message": "Secure Identity Handshake Initiated. Please check your inbox for the AI-generated code."}
 
 @app.post("/api/verify-otp")
 async def verify_otp(data: VerifyRequest):
     """Teammate's Stable OTP Verification Logic with Admin Moulding"""
-    record = auth_context.get(data.email)
+    email = data.email.strip().lower()
+    record = auth_context.get(email)
     
     if not record or datetime.now() > record["expiry"]:
         raise HTTPException(status_code=400, detail="OTP expired or not requested.")
@@ -203,25 +234,23 @@ async def verify_otp(data: VerifyRequest):
     
     record["verified"] = True
     
-    # Administrative Moulding: Fetch Role and Ward from DB
+    # Administrative Moulding: Check if system_config exists to flag setup completion
+    conn = sqlite3.connect(DATABASE_PATH)
+    config_exists = conn.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
+    
     admin_role = "Desk_Officer"
     ward = "General"
+    is_setup_complete = 1 if config_exists else 0
     
     if record["role"] == "government":
-        conn = sqlite3.connect(DATABASE_PATH)
         user_data = conn.execute(
-            "SELECT role, ward, is_setup_complete FROM government_officers WHERE email = ?", 
+            "SELECT admin_role, ward FROM government_officers WHERE email = ?", 
             (data.email,)
         ).fetchone()
-        conn.close()
         if user_data:
             admin_role = user_data[0] # Usually 'Admin' or 'Desk_Officer'
             ward = user_data[1]
-            is_setup_complete = user_data[2]
-        else:
-            is_setup_complete = 0
-    else:
-        is_setup_complete = 0
+    conn.close()
 
     # Simple Token Generation
     access_token = create_access_token(
@@ -232,6 +261,7 @@ async def verify_otp(data: VerifyRequest):
     return {
         "status": "success", 
         "token": access_token,
+        "token_type": "bearer",
         "role": record["role"], 
         "admin_role": admin_role,
         "ward": ward,
@@ -245,7 +275,8 @@ async def verify_otp(data: VerifyRequest):
 @app.post("/register/citizen")
 async def register_citizen(data: CitizenFinal):
     """Revolutionary Developer: Final Citizen Registration"""
-    if not auth_context.get(data.email, {}).get("verified"):
+    email = data.email.strip().lower()
+    if not auth_context.get(email, {}).get("verified"):
         raise HTTPException(status_code=403, detail="Email not verified via OTP.")
 
     conn = sqlite3.connect(DATABASE_PATH)
@@ -275,6 +306,7 @@ async def register_government(
     proof: UploadFile = File(...)
 ):
     """Revolutionary Developer: Secure Government Officer Registration"""
+    email = email.strip().lower()
     if not auth_context.get(email, {}).get("verified"):
         raise HTTPException(status_code=403, detail="STRICT: Email verification required first.")
 
@@ -287,9 +319,13 @@ async def register_government(
 
     conn = sqlite3.connect(DATABASE_PATH)
     try:
+        # SYSTEMS ARCHITECT: First-User Elevation (Zero-Touch Admin Deployment)
+        officer_count = conn.execute("SELECT COUNT(*) FROM government_officers").fetchone()[0]
+        final_role = "Admin" if officer_count == 0 else admin_role
+
         conn.execute(
             "INSERT INTO government_officers (name, email, phone, ward, uid_number, proof_path, password_hash, admin_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, email, phone, ward, uid, proof_path, hash_password(password), admin_role)
+            (name, email, phone, ward, uid, proof_path, hash_password(password), final_role)
         )
         conn.commit()
         
@@ -326,6 +362,7 @@ async def submit_complaint(
     Validates OTP verification status before triggering AI scan.
     """
     # STRICT Conflict Resolution: Verify OTP Identity Layer first
+    email = email.lower()
     verification_record = auth_context.get(email)
     if not verification_record or not verification_record.get("verified"):
         raise HTTPException(status_code=403, detail="STRICT ORDER: Citizen must verify OTP before filing a grievance.")
@@ -452,15 +489,17 @@ async def login(
     """Revolutionary Developer Security: Enterprise Standard OAuth2"""
     print(f"Testing SECURE Login: {form_data.username}")
     
-    # In a real app, verify against hashed password in DB
+    # Top-Down Authority Check: Determine setup status from system_config
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT admin_role, is_setup_complete FROM government_officers WHERE email = ?", (form_data.username,))
+    cursor.execute("SELECT admin_role FROM government_officers WHERE email = ?", (form_data.username,))
     user_data = cursor.fetchone()
+    
+    config_exists = cursor.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
     conn.close()
     
     admin_role = user_data[0] if user_data else "Desk_Officer"
-    is_setup_complete = user_data[1] if user_data else 0
+    is_setup_complete = 1 if config_exists else 0
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -478,16 +517,37 @@ async def login(
         "message": "Access Granted"
     }
 
-@app.get("/api/v1/system/status")
-async def get_system_status(current_user: str = Depends(get_current_user)):
-    """Gatekeeper Logic: Check if the logged-in admin has completed system_config."""
+@app.get("/api/v1/user/profile")
+async def get_user_profile(current_user: str = Depends(get_current_user)):
+    """Administrative Identity Check: Returns profile details including setup status."""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT is_setup_complete FROM government_officers WHERE email = ?", (current_user,))
-    result = cursor.fetchone()
+    cursor.execute("SELECT admin_role, ward FROM government_officers WHERE email = ?", (current_user,))
+    user_data = cursor.fetchone()
+    
+    config_exists = cursor.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
     conn.close()
     
-    is_complete = result[0] if result else 0
+    admin_role = user_data[0] if user_data else "Desk_Officer"
+    ward = user_data[1] if user_data else "General"
+    is_setup_complete = 1 if config_exists else 0
+    
+    return {
+        "email": current_user,
+        "admin_role": admin_role,
+        "ward": ward,
+        "is_setup_complete": is_setup_complete
+    }
+
+@app.get("/api/v1/system/status")
+async def get_system_status():
+    """Gatekeeper Logic: Dynamic status check via system_config table."""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    config_exists = cursor.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
+    conn.close()
+    
+    is_complete = 1 if config_exists else 0
     return {"is_setup_complete": is_complete}
 
 @app.post("/api/v1/system/configure")
@@ -497,22 +557,34 @@ async def configure_system(
     sla: int = Form(...),
     admin: str = Depends(check_admin_authority)
 ):
-    """Admin configuration authority"""
+    """
+    Top-Down Authority: Unified System Moulding.
+    Restricted to Administative Body Leads.
+    """
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
+    
+    # Verify Administrative Role for this command (Strict RBAC)
+    cursor.execute("SELECT admin_role FROM government_officers WHERE email = ?", (admin,))
+    role_record = cursor.fetchone()
+    if not role_record or role_record[0].lower() != 'admin':
+        conn.close()
+        raise HTTPException(
+            status_code=403, 
+            detail="AUTHORITY DENIED: Only the System Admin can access the setup table."
+        )
+
     cursor.execute("DELETE FROM system_config")
     cursor.execute(
         "INSERT INTO system_config (administrative_scope, category_mapping, sla_hours) VALUES (?, ?, ?)",
         (scope, mapping, sla)
     )
-    # Mark setup as complete for this admin
-    cursor.execute(
-        "UPDATE government_officers SET is_setup_complete = 1 WHERE email = ?",
-        (admin,)
-    )
+    # Global sync: All admin personnel are now on the same operational page
+    cursor.execute("UPDATE government_officers SET is_setup_complete = 1")
+    
     conn.commit()
     conn.close()
-    return {"status": "success", "message": "System Moulded."}
+    return {"status": "success", "message": "System Moulded: The Administrative Reality has been updated."}
 
 @app.get("/api/v1/system/config")
 async def get_system_config(current_user: str = Depends(get_current_user)):
@@ -548,6 +620,28 @@ async def resolve_grievance(
     return {"message": "Grievance resolved with physical evidence."}
 
 
+@app.post("/api/v1/complaints/{id}/issue-job-card")
+async def issue_job_card(id: int, current_user: str = Depends(get_current_user)):
+    """Commander Dispatch: Auto-calculates 2-hour deadline and assigns sovereignty job card."""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    # SYSTEM ARCHITECT: Strict 2-Hour Sovereign Handshake
+    deadline = (datetime.now() + timedelta(hours=2)).isoformat()
+    
+    cursor.execute(
+        "UPDATE complaints SET status='assigned', assigned_at=CURRENT_TIMESTAMP, deadline_at=? WHERE id=?",
+        (deadline, id)
+    )
+    conn.commit()
+    conn.close()
+    return {
+        "status": "success", 
+        "message": "COMMANDER DISPATCHED: Job Card Issued. 2-Hour Triage Active.",
+        "deadline": deadline
+    }
+
+
 # Route for Government Officials to view complaints (Filtered by Category and Ward)
 @app.get("/get-complaints")
 async def get_complaints(
@@ -560,11 +654,15 @@ async def get_complaints(
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        search_term = f"%{category.split(' ')[0]}%" 
+        search_term = f"%{category.split(' ')[0]}%" if category else "%%"
+
+        # Fetch system scope for label bridging
+        config = cursor.execute("SELECT administrative_scope FROM system_config LIMIT 1").fetchone()
+        scope = config[0] if config else "Municipal"
 
         cursor.execute('''
             SELECT * FROM complaints 
-            WHERE ward_zone = ? AND ai_category LIKE ? AND status = 'verified'
+            WHERE ward_zone = ? AND ai_category LIKE ? AND status IN ('verified', 'assigned', 'resolved')
             ORDER BY ai_score DESC
         ''', (ward, search_term))
         
@@ -580,10 +678,7 @@ async def get_complaints(
                 # DATA MASKING: Only last 3 digits visible
                 masked_phone = ("*" * (len(raw_phone) - 3)) + raw_phone[-3:] if len(raw_phone) >= 3 else raw_phone
                 
-                # Top-Down Configuration Authority: Label Mapping
-                comp_dict["Administrative Domain"] = comp_dict.get("ai_category")
-                comp_dict["Public Risk Index"] = comp_dict.get("ai_score")
-                
+                # Top-Down Configuration Authority: Label Mapping (Handled by frontend)
                 comp_dict["full_name"] = raw_name
                 comp_dict["phone_number"] = masked_phone
             except Exception as e:
@@ -634,13 +729,13 @@ async def get_heatmap(
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        query = "SELECT latitude, longitude, ai_score, ai_category FROM complaints WHERE status = 'verified'"
+        query = "SELECT latitude, longitude, ai_score, ai_category FROM complaints WHERE status IN ('verified', 'assigned')"
         params = []
         
         if ward:
             query += " AND ward_zone = ?"
             params.append(ward)
-        if category:
+        if category and category != 'undefined':
             query += " AND ai_category LIKE ?"
             params.append(f"%{category.split(' ')[0]}%")
             

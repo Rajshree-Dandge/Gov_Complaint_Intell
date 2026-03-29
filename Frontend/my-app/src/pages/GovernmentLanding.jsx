@@ -49,425 +49,127 @@ function matchesCategory(complaint, category) {
   return category.dbMatch.some(m => cat === m.toLowerCase());
 }
 
-export default function GovernmentDashboard() {
-  const { complaints, updateStatus } = useComplaints();
+export default function GovernmentLanding() {
   const { user, logout } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedComplaint, setSelectedComplaint] = useState(null);
-  const [timeFilter, setTimeFilter] = useState('Monthly');
-  const [rightSearch, setRightSearch] = useState('');
-  const [aiMessages, setAiMessages] = useState([
-    { role: 'bot', text: 'Hello! I can help you summarize complaints, check statuses, or answer questions about the system. Try asking me something!' },
-  ]);
-  const [aiInput, setAiInput] = useState('');
+  const [systemConfig, setSystemConfig] = useState({});
+  const [loading, setLoading] = useState(true);
+  
+  const scope = systemConfig.administrative_scope || 'Municipal Corporation';
+  const isPanchayat = scope === 'Gram Panchayat';
+  
+  // DYNAMIC ARCHITECT: ADMINISTRATIVE LABELS (MORNING NEWSPAPER MOULD)
+  const dashboardTitle = isPanchayat ? "Gram Panchayat Morning Newspaper" : "City Intelligence Live";
+  const departmentLabel = isPanchayat ? 'Our Work Units' : 'Administrative Domain';
+  const officerLabel = isPanchayat ? "Field Team" : "Officer Identity";
 
-  const [clusters, setClusters] = useState([]);
-
-  // Fetch AI Heatmap Data (DBSCAN results)
   useEffect(() => {
-    const fetchHeatmap = async () => {
-      const token = localStorage.getItem('token'); // Retrieve JWT from storage
-      const officerWard = user?.ward || user?.zone;
-      
+    const fetchConfig = async () => {
       try {
-        const res = await axios.get("http://127.0.0.1:8000/get-heatmap", {
-          params: { ward: officerWard },
+        const token = localStorage.getItem('token');
+        const res = await axios.get("http://127.0.0.1:8000/api/v1/system/config", {
           headers: { Authorization: `Bearer ${token}` }
         });
-        if (res.data && res.data.clusters) {
-          setClusters(res.data.clusters);
-        }
+        setSystemConfig(res.data);
       } catch (err) {
-        console.error("AI Heatmap Fetch Error:", err);
-      }
-    };
-    if (user) fetchHeatmap();
-  }, [user]);
-
-  // Compute stats based on context (overall or category-specific) + time filter
-  const relevantComplaints = useMemo(() => {
-    let filtered = complaints;
-    if (selectedCategory) {
-      filtered = filtered.filter(c => matchesCategory(c, selectedCategory));
-    }
-    return filterByTime(filtered, timeFilter);
-  }, [complaints, selectedCategory, timeFilter]);
-
-  // 1. Local calculation for immediate statistics (Fallback)
-  const localStats = useMemo(() => ({
-    total: relevantComplaints.length,
-    pending: relevantComplaints.filter(c => c.status === 'Pending').length,
-    inProgress: relevantComplaints.filter(c => c.status === 'In Progress').length,
-    resolved: relevantComplaints.filter(c => (c.status === 'Resolved' || c.status === 'Solved')).length,
-    rejected: relevantComplaints.filter(c => c.status === 'Rejected').length,
-  }), [relevantComplaints]);
-
-  const [backendStats, setBackendStats] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  // 2. Fetch specialized ward stats if the user has a ward assigned
-  useEffect(() => {
-    const fetchWardStats = async () => {
-      const token = localStorage.getItem('token');
-      const officerWard = user?.ward || user?.zone;
-      if (!officerWard) return;
-      
-      try {
-        setLoading(true);
-        const res = await axios.get(`http://127.0.0.1:8000/get-ward-stats?ward=${officerWard}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.data && res.data.stats) {
-          setBackendStats(res.data.stats);
-        }
-      } catch (err) {
-        console.error("Error fetching ward stats:", err);
+        console.error("Config Fetch Error", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchWardStats();
-  }, [user]);
+    fetchConfig();
+  }, []);
 
+  const currentDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  // Use backend stats if available, otherwise fallback to local
-  const stats = backendStats || localStats;
-
-  // Category counts for cards (always use all complaints, no time filter for card counts)
-  const categoryCounts = useMemo(() => {
-    const counts = {};
-    CATEGORIES.forEach(cat => {
-      counts[cat.key] = complaints.filter(c => matchesCategory(c, cat)).length;
-    });
-    return counts;
-  }, [complaints]);
-
-  // Search filter for right sidebar
-  const filteredRight = useMemo(() => {
-    if (!rightSearch) return [];
-    const q = rightSearch.toLowerCase();
-    return complaints.filter(c => {
-      const id = (c.id || c.complaint_number || '').toLowerCase();
-      const desc = (c.description || '').toLowerCase();
-      const name = (c.citizenName || c.citizen_name || c.citizen_email || '').toLowerCase();
-      return id.includes(q) || desc.includes(q) || name.includes(q);
-    });
-  }, [complaints, rightSearch]);
-
-  // Analysis helpers
-  const getMostCommonCategory = () => {
-    const counts = {};
-    complaints.forEach(c => { counts[c.category] = (counts[c.category] || 0) + 1; });
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return sorted.length ? sorted[0][0] : '—';
-  };
-
-  const getAvgPerWard = () => {
-    const wards = new Set(complaints.map(c => c.ward).filter(Boolean));
-    return wards.size ? (complaints.length / wards.size).toFixed(1) : '—';
-  };
-
-  const handleAiSend = () => {
-    if (!aiInput.trim()) return;
-    const question = aiInput.trim();
-    setAiMessages(prev => [...prev, { role: 'user', text: question }]);
-    setAiInput('');
-    const qLower = question.toLowerCase();
-    let response = '';
-    if (qLower.includes('summary') || qLower.includes('summarize')) {
-      response = `Currently: ${stats.total} complaints — ${stats.pending} pending, ${stats.inProgress} in progress, ${stats.resolved} resolved, ${stats.rejected} rejected.`;
-    } else if (qLower.includes('pending')) {
-      response = `There are ${stats.pending} pending complaints that need attention.`;
-    } else if (qLower.includes('resolved')) {
-      response = `${stats.resolved} out of ${stats.total} resolved (${stats.total ? ((stats.resolved / stats.total) * 100).toFixed(0) : 0}%).`;
-    } else if (qLower.includes('urgent')) {
-      const urgent = complaints.filter(c => (c.priority || '').toLowerCase() === 'urgent');
-      response = `There are ${urgent.length} urgent complaints: ${urgent.map(c => c.id || c.complaint_number).join(', ') || 'none'}.`;
-    } else if (qLower.includes('help') || qLower.includes('what can')) {
-      response = 'You can ask me: "summarize complaints", "how many pending?", "show urgent complaints", or "resolution rate".';
-    } else {
-      response = `Total: ${stats.total}. Pending: ${stats.pending}. In Progress: ${stats.inProgress}. Resolved: ${stats.resolved}. Rejected: ${stats.rejected}.`;
-    }
-    setTimeout(() => setAiMessages(prev => [...prev, { role: 'bot', text: response }]), 400);
-  };
-
-  const getPriorityClass = (priority) => {
-    const p = (priority || '').toLowerCase();
-    if (p === 'urgent' || p === 'critical') return 'critical';
-    if (p === 'high') return 'high';
-    if (p === 'low') return 'low';
-    return 'medium';
-  };
-
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'profile':
-        return (
-          <div className="tab-panel">
-            <h3>Profile</h3>
-            <p>Logged in as: <strong>{user?.email}</strong></p>
-            <p>Name: <strong>{user?.name || '—'}</strong></p>
-            <p>Role: Government Official</p>
-          </div>
-        );
-      case 'settings':
-        return (
-          <div className="tab-panel">
-            <h3>Settings</h3>
-            <div className="settings-row"><label>Email Notifications</label><button className="settings-toggle on"></button></div>
-            <div className="settings-row"><label>Auto-assign Complaints</label><button className="settings-toggle"></button></div>
-            <div className="settings-row"><label>Dark Mode</label><button className="settings-toggle on"></button></div>
-          </div>
-        );
-      case 'reports':
-        return (
-          <div className="tab-panel">
-            <h3>Reports</h3>
-            <p>View detailed complaint analytics and breakdowns.</p>
-            <Link to="/reports" className="nav-link" style={{ color: 'var(--accent-teal)', padding: 0 }}>Go to Full Reports →</Link>
-          </div>
-        );
-      case 'analysis':
-        return (
-          <div className="tab-panel">
-            <h3>Analysis</h3>
-            <p>Resolution Rate: <strong>{stats.total ? ((stats.resolved / stats.total) * 100).toFixed(1) : 0}%</strong></p>
-            <p>Most common category: <strong>{getMostCommonCategory()}</strong></p>
-            <p>Average complaints per ward: <strong>{getAvgPerWard()}</strong></p>
-          </div>
-        );
-      default:
-        return selectedCategory ? renderCategoryTable() : renderCategoryCards();
-    }
-  };
-
-  const renderCategoryCards = () => (
-    <>
-      <div className="category-grid">
-        {CATEGORIES.map(cat => (
-          <div className="category-card" key={cat.key} onClick={() => { setSelectedCategory(cat); setActiveTab('overview'); }}>
-            <span className="category-card-live">LIVE</span>
-            <div className="category-card-icon">{cat.icon}</div>
-            <div className="category-card-name">{cat.name}</div>
-            <div className="category-card-count">{categoryCounts[cat.key] || 0}</div>
-            <div className="category-card-label">Active Grievances</div>
-            <button className="category-card-btn" onClick={(e) => { e.stopPropagation(); setSelectedCategory(cat); setActiveTab('overview'); }}>
-              Access Desk 1 →
-            </button>
-          </div>
-        ))}
-        {/* AI Heatmap Reflector */}
-        <div className="heatmap-card">
-          <div className="heatmap-card-title">🗺️ AI Heatmap Reflector</div>
-          <div className="heatmap-card-sub">DBSCAN Clustering Active (Real-time)</div>
-          <div className="heatmap-wrapper" style={{ marginTop: '15px' }}>
-            <GrievanceMap clusters={clusters} />
-          </div>
-        </div>
-      </div>
-    </>
-  );
-
-  const renderCategoryTable = () => {
-    const catComplaints = complaints.filter(c => matchesCategory(c, selectedCategory));
-    return (
-      <div className="category-table-view">
-        <button className="category-back-btn" onClick={() => setSelectedCategory(null)}>
-          ← Back to Command Center
-        </button>
-        <h2 className="category-table-title">{selectedCategory.name} Intelligence Dashboard</h2>
-        <p className="category-table-sub">
-          Showing verified results for <strong>{user?.ward || user?.zone || 'All Wards'}</strong>
-        </p>
-        <table className="complaints-table">
-          <thead>
-            <tr>
-              <th>Priority Status</th>
-              <th>Citizen Name</th>
-              <th>AI Severity Score</th>
-              <th>Location</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {catComplaints.length === 0 ? (
-              <tr><td colSpan={5} className="table-empty">No complaints in this category.</td></tr>
-            ) : (
-              catComplaints.map(c => (
-                <tr key={c.id || c.complaint_number}>
-                  <td>
-                    <span className={`priority-badge ${getPriorityClass(c.priority)}`}>
-                      {(c.priority || 'Medium').toUpperCase()}
-                    </span>
-                  </td>
-                  <td>{c.citizenName || c.citizen_name || c.citizen_email}</td>
-                  <td>{c.ai_score ? `${c.ai_score}/10` : '4.2/10'}</td>
-                  <td>{c.location}</td>
-                  <td>
-                    <button className="table-action-btn" onClick={() => setSelectedComplaint(c)}>Evidence</button>
-                    {c.status !== 'Resolved' && (
-                      <button className="table-action-btn resolve" onClick={() => updateStatus(c.id || c.complaint_number, 'Resolved')}>Resolve</button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const userZone = user?.ward || user?.zone || 'Ward 1';
+  if (loading) return <div className="war-room-loader"><span>Typesetting The News...</span></div>;
 
   return (
-    <div className="dashboard-page">
-      <nav className="dashboard-nav">
-        <div className="nav-brand"><span className="nav-icon">🏛️</span><span>Grievance Management System</span></div>
-        <div className="nav-links">
-          <Link to="/dashboard/:category" className="nav-link active">Dashboard</Link>
-          <Link to="/reports" className="nav-link">Reports</Link>
-          <Link to="/" className="nav-link">Citizen Portal</Link>
-          <button className="theme-toggle" onClick={toggleTheme}>{isDark ? '☀️' : '🌙'}</button>
-          <button className="nav-logout" onClick={() => { logout(); navigate('/login'); }}>Logout</button>
+    <div className="dashboard-wrapper">
+      {/* --- NEWSPAPER HEADER --- */}
+      <header className="newspaper-header" style={{background: '#FFFFFF', borderBottom: '8px solid #F0F9FF'}}>
+        <div className="header-top">
+            <span>Vol. 2026 - Digital Edition</span>
+            <span><Calendar size={14} style={{verticalAlign: 'middle'}}/> {currentDate}</span>
+            <span><User size={14} style={{verticalAlign: 'middle'}}/> {officerLabel}: Verified</span>
         </div>
-      </nav>
+        <h1 className="newspaper-title">{dashboardTitle}</h1>
+        <div className="header-bottom" style={{borderTop: '2px solid #000', padding: '0.75rem 0', display: 'flex', justifyContent: 'center', gap: '2rem', fontWeight: 800}}>
+            <span>🏛️ BODY: {scope.toUpperCase()}</span>
+            <span>👤 USER: {user?.name?.toUpperCase() || user?.email?.toUpperCase()}</span>
+            <button onClick={() => { logout(); navigate('/login'); }} style={{background: 'none', border: 'none', color: '#3b82f6', fontWeight: 900, cursor: 'pointer'}}>LOGOUT</button>
+        </div>
+      </header>
 
-      <div className="dashboard-body">
-        {/* Left Sidebar */}
-        <aside className="dash-sidebar">
-          <div className="sidebar-label">Menu</div>
-          {SIDEBAR_TABS.map(tab => (
-            <button
-              key={tab.id}
-              className={'sidebar-tab' + (activeTab === tab.id ? ' active' : '')}
-              onClick={() => { setActiveTab(tab.id); if (tab.id !== 'overview') setSelectedCategory(null); }}
-            >
-              <span className="sidebar-tab-icon">{tab.icon}</span>{tab.label}
-            </button>
-          ))}
-        </aside>
+      <div className="newspaper-body" style={{background: '#FFFFFF'}}>
+        {/* --- MAIN COLUMN --- */}
+        <main className="top-story" style={{padding: '3rem', borderRight: '2px solid #F0F9FF'}}>
+            <div className="headline-wrap">
+                <span className="severity-badge badge-dangerous">Sovereign Briefing: Top Priority</span>
+                <h2 className="headline-large">Welcome Back to the {isPanchayat ? 'Work Units' : 'Desk'}.</h2>
+            </div>
+            
+            <div className="morning-overview" style={{marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2rem'}}>
+                {CATEGORIES.map(cat => (
+                    <div 
+                        key={cat.key} 
+                        className="bento-item selectable-item" 
+                        style={{border: '4px solid #F0F9FF', padding: '2rem', background: '#FFFFFF', textAlign: 'left'}}
+                        onClick={() => navigate(`/dashboard/${cat.key}`)}
+                    >
+                        <div className="icon-wrapper" style={{fontSize: '3rem', marginBottom: '1rem'}}>{cat.icon}</div>
+                        <h3 style={{fontSize: '1.5rem', fontWeight: 900, marginBottom: '0.5rem'}}>{cat.name}</h3>
+                        <p style={{color: '#64748b', fontSize: '0.9rem'}}>Access {departmentLabel} and start the Morning Triage.</p>
+                        <div style={{marginTop: '1.5rem', color: '#10b981', fontWeight: 900, fontSize: '0.8rem'}}>ACCESS DESK →</div>
+                    </div>
+                ))}
+            </div>
 
-        {/* Middle Content */}
-        <main className="dash-main">
-          <div className="welcome-section">
-            <div className="welcome-badge">✓ Logged In</div>
-            <h1 className="welcome-heading">Welcome back, <span>{user?.name || user?.email || 'Admin'}</span> 👋</h1>
-            <div className="zone-badge">Operating Zone: {userZone}</div>
-            <p className="welcome-sub">Select a department to view verified grievances and the AI Severity Heatmap.</p>
-          </div>
-          {renderTabContent()}
+            {/* TRUST LOOP: VISUAL AUDIT */}
+            <section className="visual-audit-section" style={{marginTop: '4rem', paddingTop: '3rem', borderTop: '4px solid #F0F9FF'}}>
+                <h3 className="sidebar-title" style={{fontSize: '2.5rem'}}>Trust Loop: Resolved Stories</h3>
+                <div className="audit-grid" style={{marginTop: '2rem'}}>
+                    <div className="audit-item">
+                        <h4 style={{fontFamily: 'Playfair Display', fontSize: '1.3rem', marginBottom: '1rem'}}>Market Area: Sanitation Success</h4>
+                        <div className="audit-grid" style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem'}}>
+                            <div className="audit-card" style={{border: '2px solid #F0F9FF', padding: '1rem'}}>
+                                <img src="http://127.0.0.1:8000/uploads/resolutions/test_before.jpg" alt="Before" className="audit-img" style={{width: '100%', height: '250px', objectFit: 'cover'}} />
+                                <div className="audit-label" style={{marginTop: '1rem', fontWeight: 900, color: '#64748b'}}>BEFORE: COMMUNITY NEGLECT</div>
+                            </div>
+                            <div className="audit-card" style={{border: '4px solid #10b981', padding: '1rem'}}>
+                                <img src="http://127.0.0.1:8000/uploads/resolutions/test_fixed.jpg" alt="After" className="audit-img" style={{width: '100%', height: '250px', objectFit: 'cover'}} />
+                                <div className="audit-label" style={{marginTop: '1rem', fontWeight: 900, color: '#10b981'}}>AFTER: GOVERNANCE TRUTH</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
-        {/* Right Sidebar */}
-        <aside className="dash-right">
-          <div>
-            <div className="right-section-title">
-              {selectedCategory ? `${selectedCategory.name} Statistics` : '📊 Complaint Tracking'}
-            </div>
-            <div className="time-filter">
-              {TIME_FILTERS.map(tf => (
-                <button key={tf} className={`time-filter-btn${timeFilter === tf ? ' active' : ''}`} onClick={() => setTimeFilter(tf)}>
-                  {tf}
-                </button>
-              ))}
-            </div>
-            <div className="tracking-cards">
-              <div className="tracking-card"><span className="tracking-label">Total</span><span className="tracking-count">{stats.total}</span></div>
-              <div className="tracking-card"><span className="tracking-label">Pending</span><span className="tracking-count tc-pending">{stats.pending}</span></div>
-              <div className="tracking-card"><span className="tracking-label">In Progress</span><span className="tracking-count tc-progress">{stats.inProgress}</span></div>
-              <div className="tracking-card"><span className="tracking-label">Resolved</span><span className="tracking-count tc-resolved">{stats.resolved}</span></div>
-              <div className="tracking-card"><span className="tracking-label">Rejected</span><span className="tracking-count tc-rejected">{stats.rejected}</span></div>
-            </div>
-          </div>
-
-          <input
-            className="right-search"
-            placeholder="🔍 Search complaints..."
-            value={rightSearch}
-            onChange={e => setRightSearch(e.target.value)}
-          />
-
-          {rightSearch && (
-            <div className="right-search-results">
-              {filteredRight.slice(0, 4).map(c => (
-                <div className="complaint-item" key={c.id || c.complaint_number} onClick={() => setSelectedComplaint(c)}>
-                  <span className="complaint-item-id">{c.id || c.complaint_number}</span>
-                  <span className="complaint-item-desc">{c.description}</span>
+        {/* --- SIDEBAR --- */}
+        <aside className="newspaper-sidebar" style={{background: '#F0F9FF', padding: '3rem'}}>
+            <div className="briefing-box leaderboard-widget" style={{background: '#FFFFFF', padding: '2rem', border: '4px solid #3b82f6'}}>
+                <h3 className="sidebar-title" style={{fontSize: '1.5rem', border: 'none', marginBottom: '1.5rem'}}>Worker Leaderboard</h3>
+                <div className="leaderboard-item">
+                    <span className="worker-rank">#1</span>
+                    <div className="worker-info">
+                        <strong>Rahul Patil ({isPanchayat ? 'Field Team Lead' : 'Senior Officer'})</strong>
+                        <p>4 Verified Fixes this week</p>
+                    </div>
+                    <div className="score-badge">EXCEPTIONAL</div>
                 </div>
-              ))}
-              {filteredRight.length === 0 && <div className="search-empty">No results found.</div>}
             </div>
-          )}
 
-          <div className="ai-bot-section">
-            <div className="ai-bot-header"><div className="ai-bot-dot"></div><span>AI Assistant</span></div>
-            <div className="ai-bot-messages">
-              {aiMessages.map((msg, i) => (<div key={i} className={'ai-msg ' + msg.role}>{msg.text}</div>))}
+            <div className="briefing-box" style={{background: '#FFFFFF', padding: '2rem', marginTop: '2rem', border: '2px solid #e2e8f0'}}>
+                <h3 className="sidebar-title" style={{fontSize: '1.5rem', border: 'none'}}>Morning Briefing</h3>
+                <p style={{fontSize: '0.9rem', color: '#64748b', lineHeight: '1.6'}}>
+                    Today, the AI Sovereign Pipeline has detected <strong>14 new verified grievances</strong>.
+                    Immediate attention is required in the <strong>East Sector</strong>.
+                </p>
+                <div className="ai-truth-tag" style={{position: 'static', marginTop: '1rem', textAlign: 'center'}}>📍 TRUTH VERIFIED BY AI</div>
             </div>
-            <div className="ai-bot-input-wrap">
-              <input className="ai-bot-input" placeholder="Ask something..." value={aiInput} onChange={e => setAiInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAiSend()} />
-              <button className="ai-bot-send" onClick={handleAiSend}>→</button>
-            </div>
-          </div>
         </aside>
       </div>
-
-      {selectedComplaint && (
-        <div className="modal-overlay" onClick={() => setSelectedComplaint(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setSelectedComplaint(null)}>×</button>
-            <h2>{selectedComplaint.id || selectedComplaint.complaint_number}</h2>
-            <div className="modal-grid">
-              <div><strong>Citizen:</strong> {selectedComplaint.citizenName || selectedComplaint.citizen_name || selectedComplaint.citizen_email}</div>
-              <div><strong>Email:</strong> {selectedComplaint.citizen_email}</div>
-              <div><strong>Date:</strong> {selectedComplaint.date}</div>
-              <div><strong>Category:</strong> {selectedComplaint.category}</div>
-              <div><strong>Priority:</strong> {selectedComplaint.priority}</div>
-              <div><strong>Location:</strong> {selectedComplaint.location}</div>
-              <div><strong>Ward:</strong> {selectedComplaint.ward || '—'}</div>
-              <div><strong>Sentiment:</strong> {selectedComplaint.sentiment}</div>
-              <div>
-                <strong>Status:</strong>
-                <select
-                  value={selectedComplaint.status}
-                  onChange={e => { updateStatus(selectedComplaint.id || selectedComplaint.complaint_number, e.target.value); setSelectedComplaint({ ...selectedComplaint, status: e.target.value }); }}
-                  className="modal-status-select"
-                >
-                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="modal-desc"><strong>Description:</strong><p>{selectedComplaint.description}</p></div>
-            {selectedComplaint.history && selectedComplaint.history.length > 0 && (
-              <div className="modal-timeline">
-                <strong>Status Timeline</strong>
-                <div className="timeline">
-                  {selectedComplaint.history.map((entry, idx) => (
-                    <div className="timeline-item" key={idx}>
-                      <div className="timeline-dot-wrap">
-                        <div className={'timeline-dot dot-' + entry.status?.toLowerCase().replace(/\s/g, '')}></div>
-                        {idx < selectedComplaint.history.length - 1 && <div className="timeline-line"></div>}
-                      </div>
-                      <div className="timeline-content">
-                        <span className={'timeline-status status-' + entry.status?.toLowerCase().replace(/\s/g, '')}>{entry.status}</span>
-                        <span className="timeline-note">{entry.note}</span>
-                        <span className="timeline-time">{new Date(entry.timestamp).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {selectedComplaint.imageUrl && (
-              <div className="modal-image"><img src={selectedComplaint.imageUrl} alt="Complaint evidence" /></div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
