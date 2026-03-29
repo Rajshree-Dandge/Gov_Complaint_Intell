@@ -84,10 +84,10 @@ async def check_admin_authority(current_user: str = Depends(get_current_user)):
     user = cursor.fetchone()
     conn.close()
     
-    if not user or user[0].lower() != 'admin':
+    if not user or user[0].lower() not in ['government', 'admin']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="ADMIN AUTHORITY REQUIRED: Access restricted to Admin only."
+            detail="GOVERNMENT AUTHORITY REQUIRED: Access restricted to Government staff."
         )
     return current_user
 

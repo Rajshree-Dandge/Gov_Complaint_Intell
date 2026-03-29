@@ -1,21 +1,28 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Building2, 
-  Users, 
-  Files, 
-  Zap, 
-  CheckCircle2, 
-  ArrowRight, 
+
+import {
+  Building2,
+  Users,
+  Files,
+  Zap,
+  CheckCircle2,
+  ArrowRight,
   ChevronRight,
   ShieldCheck,
   Clock,
-  LayoutGrid
+  LayoutGrid,
+  Bot
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import './AdminOnboarding.css';
 
+/**
+ * REVOLUTIONARY DEVELOPER: ADAPTIVE GOVERNANCE PORTAL
+ * The Initialization Wizard has been refactored for "Digital Sunlight" UI.
+ * It provides a smooth, animated progressive handshake with the backend.
+ */
 const AdminOnboarding = () => {
   const { user, login } = useAuth();
   const navigate = useNavigate();
@@ -28,12 +35,8 @@ const AdminOnboarding = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const steps = [
-    { title: 'Body', icon: <Building2 size={16} /> },
-    { title: 'Hierarchy', icon: <Users size={16} /> },
-    { title: 'Workflow', icon: <Files size={16} /> },
-    { title: 'Finish', icon: <Zap size={16} /> },
-  ];
+  const stepsCount = 4;
+  const progressPercent = ((step - 1) / (stepsCount - 1)) * 100;
 
   const handleNext = () => {
     if (step < 4) setStep(step + 1);
@@ -56,15 +59,16 @@ const AdminOnboarding = () => {
       }));
       params.append('sla', '24'); // Default SLA
 
+      // THE INTERACTIVE HANDSHAKE: POST REQUEST WITH TOKEN
       const response = await axios.post('http://127.0.0.1:8000/api/v1/system/configure', params, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       });
 
       if (response.data.status === 'success') {
-        // Update local user state to reflect setup complete
+        // REVOLUTIONARY DEVELOPER: PERSISTING CONFIGURATION STATE
         const updatedUser = { ...user, is_setup_complete: 1 };
         login(updatedUser, token);
         navigate('/dashboard');
@@ -85,8 +89,8 @@ const AdminOnboarding = () => {
               <h2>Select Administrative Body</h2>
               <p>Identify the jurisdiction scale Nivaran will manage.</p>
             </div>
-            {['Gram Panchayat', 'Nagar Parishad', 'BMC / PMC'].map((type) => (
-              <div 
+            {['Gram Panchayat', 'Nagar Parishad', 'Municipal Corporation'].map((type) => (
+              <div
                 key={type}
                 className={`bento-item selectable-item ${formData.bodyType === type ? 'selected' : ''}`}
                 onClick={() => setFormData({ ...formData, bodyType: type })}
@@ -111,9 +115,9 @@ const AdminOnboarding = () => {
             <div className="bento-item input-item span-2">
               <label>Number of Desk 1 Officers</label>
               <div className="input-with-icon">
-                <ShieldCheck size={20} />
-                <input 
-                  type="number" 
+                <ShieldCheck size={20} color="#3B82F6" />
+                <input
+                  type="number"
                   min="0"
                   placeholder="e.g. 5"
                   value={formData.deskOfficers}
@@ -128,9 +132,9 @@ const AdminOnboarding = () => {
             <div className="bento-item input-item span-2">
               <label>Field Workers Available</label>
               <div className="input-with-icon">
-                <Users size={20} />
-                <input 
-                  type="number" 
+                <Users size={20} color="#10B981" />
+                <input
+                  type="number"
                   min="0"
                   placeholder="e.g. 20"
                   value={formData.fieldWorkers}
@@ -151,42 +155,35 @@ const AdminOnboarding = () => {
               <h2>Legacy Workflow Mapping</h2>
               <p>How are complaints handled today?</p>
             </div>
-            <div 
-              className={`bento-item selectable-item ${formData.legacyFlow === 'Manual' ? 'selected' : ''}`}
-              onClick={() => setFormData({ ...formData, legacyFlow: 'Manual' })}
-            >
-              <div className="icon-wrapper secondary">
-                <Files size={24} />
+            {['Manual', 'Email', 'Excel/Sheet'].map((flow) => (
+              <div
+                key={flow}
+                className={`bento-item selectable-item ${formData.legacyFlow === flow ? 'selected' : ''}`}
+                onClick={() => setFormData({ ...formData, legacyFlow: flow })}
+              >
+                <div className="icon-wrapper">
+                  {flow === 'Manual' ? <Files size={24} /> : flow === 'Email' ? <Bot size={24} /> : <LayoutGrid size={24} />}
+                </div>
+                <h3>{flow} Path</h3>
+                <p>Digitalizing existing {flow.toLowerCase()} context.</p>
+                {formData.legacyFlow === flow && <CheckCircle2 className="select-check" size={20} />}
               </div>
-              <h3>Manual Paper Flow</h3>
-              <p>Physical registers and hand-written memos.</p>
-            </div>
-            <div 
-              className={`bento-item selectable-item ${formData.legacyFlow === 'Email' ? 'selected' : ''}`}
-              onClick={() => setFormData({ ...formData, legacyFlow: 'Email' })}
-            >
-              <div className="icon-wrapper secondary">
-                <LayoutGrid size={24} />
-              </div>
-              <h3>Basic Email/Excel</h3>
-              <p>Digital receipts but manual categorization.</p>
-            </div>
+            ))}
           </div>
         );
       case 4:
         return (
           <div className="onboarding-stage comparison-stage">
-            <div className="comparison-header">
+            <div className="header-item">
               <h2>The Nivaran Transformation</h2>
               <p>Witness the impact of AI-driven governance.</p>
             </div>
             <div className="comparison-grid">
               <div className="comparison-card old">
-                <div className="badge">LEGACY</div>
-                <h3>Manual Workflow</h3>
-                <div className="metric">
-                  <Clock size={32} />
-                  <span>7 Days</span>
+                <h3 className="card-title">Legacy System</h3>
+                <div className="metric-wrap">
+                  <div className="metric-val" style={{color: '#ef4444'}}><Clock size={32} /> 7 Days</div>
+                  <div className="metric-label">Avg. Resolution Time</div>
                 </div>
                 <ul>
                   <li>Manual Verification</li>
@@ -195,11 +192,10 @@ const AdminOnboarding = () => {
                 </ul>
               </div>
               <div className="comparison-card new">
-                <div className="badge highlight">NIVARAN AI</div>
-                <h3>Automated Pipeline</h3>
-                <div className="metric">
-                  <Zap size={32} />
-                  <span>2 Hours</span>
+                <h3 className="card-title">Nivaran AI Pipeline</h3>
+                <div className="metric-wrap">
+                  <div className="metric-val" style={{color: '#10b981'}}><Zap size={32} /> 2 Hours</div>
+                  <div className="metric-label">Avg. Resolution Time</div>
                 </div>
                 <ul>
                   <li>YOLOv11 Object Detection</li>
@@ -218,17 +214,14 @@ const AdminOnboarding = () => {
   return (
     <div className="admin-onboarding-page">
       <div className="onboarding-container">
-        {/* Progress Stepper */}
-        <div className="stepper">
-          {steps.map((s, i) => (
-            <div key={i} className={`step-item ${step >= i + 1 ? 'active' : ''} ${step > i + 1 ? 'completed' : ''}`}>
-              <div className="step-icon">
-                {step > i + 1 ? <CheckCircle2 size={16} /> : s.icon}
-              </div>
-              <span>{s.title}</span>
-              {i < steps.length - 1 && <div className="step-line" />}
-            </div>
-          ))}
+        {/* REVOLUTIONARY PROGRESS BAR: Animated Progress Handshake */}
+        <div className="progress-container">
+          <div 
+            className="progress-bar-fill" 
+            style={{ width: `${progressPercent}%` }}
+          >
+            <div className="progress-glow"></div>
+          </div>
         </div>
 
         {/* Content Area */}
@@ -238,25 +231,29 @@ const AdminOnboarding = () => {
 
         {/* Navigation Actions */}
         <div className="onboarding-footer">
-          {step > 1 && step < 4 && (
-            <button className="btn-secondary" onClick={handleBack}>
-              Back
-            </button>
-          )}
-          
-          {step < 4 ? (
-            <button 
-              className="btn-primary" 
-              onClick={handleNext}
-              disabled={(step === 1 && !formData.bodyType) || (step === 2 && (!formData.deskOfficers || !formData.fieldWorkers)) || (step === 3 && !formData.legacyFlow)}
-            >
-              Continue <ChevronRight size={18} />
-            </button>
-          ) : (
-            <button className="btn-activate" onClick={handleActivate} disabled={isSubmitting}>
-              {isSubmitting ? 'Activating...' : 'Activate Automation'} <Zap size={18} fill="currentColor" />
-            </button>
-          )}
+          <div className="left-actions">
+            {step > 1 && (
+              <button className="btn-secondary" onClick={handleBack}>
+                Previous Step
+              </button>
+            )}
+          </div>
+
+          <div className="right-actions">
+            {step < 4 ? (
+              <button
+                className="btn-primary"
+                onClick={handleNext}
+                disabled={(step === 1 && !formData.bodyType) || (step === 2 && (!formData.deskOfficers || !formData.fieldWorkers)) || (step === 3 && !formData.legacyFlow)}
+              >
+                Continue <ChevronRight size={18} />
+              </button>
+            ) : (
+              <button className="btn-activate" onClick={handleActivate} disabled={isSubmitting}>
+                {isSubmitting ? 'Synergizing AI...' : 'Activate Automation'} <Zap size={18} fill="currentColor" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
