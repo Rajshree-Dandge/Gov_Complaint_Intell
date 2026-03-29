@@ -111,12 +111,15 @@ export default function GovernmentDashboard() {
   // 2. Fetch specialized ward stats if the user has a ward assigned
   useEffect(() => {
     const fetchWardStats = async () => {
+      const token = localStorage.getItem('token');
       const officerWard = user?.ward || user?.zone;
       if (!officerWard) return;
       
       try {
         setLoading(true);
-        const res = await axios.get(`http://127.0.0.1:8000/get-ward-stats?ward=${officerWard}`);
+        const res = await axios.get(`http://127.0.0.1:8000/get-ward-stats?ward=${officerWard}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         if (res.data && res.data.stats) {
           setBackendStats(res.data.stats);
         }
@@ -128,6 +131,7 @@ export default function GovernmentDashboard() {
     };
     fetchWardStats();
   }, [user]);
+
 
   // Use backend stats if available, otherwise fallback to local
   const stats = backendStats || localStats;

@@ -16,12 +16,15 @@ export function ComplaintProvider({ children }) {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
+      if (!token) return;
+
       const ward = user.ward || user.zone || "Ward 1";
       
       const response = await axios.get("http://127.0.0.1:8000/get-complaints", {
         params: { ward, category },
         headers: { Authorization: `Bearer ${token}` }
       });
+
 
       if (Array.isArray(response.data)) {
         setComplaints(response.data);

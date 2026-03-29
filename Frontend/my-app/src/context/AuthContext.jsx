@@ -42,8 +42,13 @@ export function AuthProvider({ children }) {
     error,
     setError,
     isAuthenticated: !!user,
-    isGovernment: user?.role === 'government'
+    isGovernment: user?.role === 'government',
+    adminRole: user?.admin_role || 'Desk_Officer',
+    isBodyAdmin: user?.admin_role === 'Body_Admin',
+    isDeskOfficer: user?.admin_role === 'Desk_Officer',
+    isSetupComplete: user?.is_setup_complete === 1
   };
+
 
   return (
     <AuthContext.Provider value={value}>

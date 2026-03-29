@@ -22,5 +22,10 @@ export default function ProtectedRoute({ children, allowedRole }) {
     return <Navigate to={user?.role === 'government' ? "/dashboard" : "/citizen"} replace />;
   }
 
+  // Mandatory Setup Redirect for Admins
+  if (user?.role === 'government' && user?.is_setup_complete === 0 && window.location.pathname !== '/admin-onboarding') {
+    return <Navigate to="/admin-onboarding" replace />;
+  }
+
   return children;
 }

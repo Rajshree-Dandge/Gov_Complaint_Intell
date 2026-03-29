@@ -82,8 +82,11 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
         email: email.trim(),
         name: name.trim(),
         role: finalRole,
-        ward: result.ward || "General" // Some users might have wards
+        admin_role: result.admin_role || "Desk_Officer",
+        ward: result.ward || "General",
+        is_setup_complete: result.is_setup_complete || 0
       }, result.token);
+
 
       setSuccessMsg('Login Successful!');
       

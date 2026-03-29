@@ -21,8 +21,9 @@ export default function GovSignup() {
   const [successMsg, setSuccessMsg] = useState('');
   const [proofFile, setProofFile] = useState(null);
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', ward: '', uid: '', password: '', confirmPassword: '',
+    name: '', email: '', phone: '', ward: '', uid: '', password: '', confirmPassword: '', admin_role: 'Desk_Officer'
   });
+
 
   // Handle Resend Timer
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function GovSignup() {
           email: form.email.trim(),
           name: form.name.trim(),
           role: 'government',
-          is_signup: true // <--- THIS WAS MISSING
+          is_signup: true 
         }),
       });
 
@@ -112,9 +113,6 @@ export default function GovSignup() {
 
     setSubmitting(true);
     try {
-      // Logic Fix: We send directly to Python Backend (SQLite)
-      // Removing the Firebase signUpWithEmail block to avoid 400 conflict
-      
       const formData = new FormData();
       formData.append('name', form.name);
       formData.append('email', form.email);
@@ -122,12 +120,14 @@ export default function GovSignup() {
       formData.append('ward', form.ward);
       formData.append('uid', form.uid); 
       formData.append('password', form.password);
+      formData.append('admin_role', form.admin_role);
       formData.append('proof', proofFile);
 
       const response = await fetch('http://localhost:8000/register/government', { 
       method: 'POST',
       body: formData,
     });
+
 
       const result = await response.json();
       
@@ -210,7 +210,15 @@ export default function GovSignup() {
                <div className="auth-field"><label>Ward Number</label>
                <input type="text" name="ward" value={form.ward} onChange={handleChange} required /></div>
                <div className="auth-field"><label>Identity UID</label>
-               <input type="text" name="uid" value={form.uid} onChange={handleChange} required /></div>
+                <input type="text" name="uid" value={form.uid} onChange={handleChange} required /></div>
+            </div>
+
+            <div className="auth-field">
+                <label>Administrative Hierarchy Role</label>
+                <select name="admin_role" value={form.admin_role} onChange={handleChange} className="auth-select">
+                    <option value="Desk_Officer">Desk Officer (Field Worker)</option>
+                    <option value="Body_Admin">Body Admin (Commissioner/Sarpanch)</option>
+                </select>
             </div>
 
             <div className="auth-field">
@@ -223,10 +231,11 @@ export default function GovSignup() {
 
             <div className="auth-row">
               <div className="auth-field"><label>Password</label>
-              <input type="password" name="password" value={form.password} onChange={handleChange} required /></div>
+              <input type="password" name="password" value={form.password} onChange={handleChange} required autoComplete="new-password" /></div>
               <div className="auth-field"><label>Confirm</label>
-              <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} required /></div>
+              <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} required autoComplete="new-password" /></div>
             </div>
+
 
             <button type="submit" className="btn-auth" disabled={submitting}>Complete Registration</button>
           </form>

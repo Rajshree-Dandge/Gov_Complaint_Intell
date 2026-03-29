@@ -76,5 +76,14 @@ def init_verification_db(cursor):
         uid_number TEXT, 
         proof_path TEXT, 
         password_hash TEXT, 
-        role TEXT DEFAULT 'government'
+        role TEXT DEFAULT 'government',
+        admin_role TEXT DEFAULT 'Desk_Officer', -- Body_Admin or Desk_Officer
+        is_setup_complete INTEGER DEFAULT 0 -- 0 = Not complete, 1 = Complete
     )''')
+    
+    # --- MIGRATION: ADD is_setup_complete if it doesn't exist ---
+    try:
+        cursor.execute("ALTER TABLE government_officers ADD COLUMN is_setup_complete INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+

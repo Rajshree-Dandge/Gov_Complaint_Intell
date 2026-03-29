@@ -75,44 +75,81 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
 
+async def check_admin_authority(current_user: str = Depends(get_current_user)):
+    """Strict Backend Provision: Admin Gatekeeping."""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    # Teammate logic uses 'role' or a specific flag
+    cursor.execute("SELECT role FROM government_officers WHERE email = ?", (current_user,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user or user[0].lower() != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ADMIN AUTHORITY REQUIRED: Access restricted to Admin only."
+        )
+    return current_user
+
+
+
 # --- 3. APP SETUP ---
 app = FastAPI(title="Nivaran Backend - Enterprise Verified AI Pipeline")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Serve the uploads folder so React can show the images
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- 4. DATABASE INITIALIZATION ---
 def init_db():
-    """Revolutionary Developer: Unified Schema for Complaints & Identity"""
+    """Revolutionary Architect: Unified Schema for Integrity & Accountability"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    # Main complaints table
+    
+    
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS complaints(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                full_name TEXT,
-                phone_number TEXT,
-                language TEXT,
-                text_desc TEXT,
-                location TEXT,
-                latitude REAL,
-                longitude REAL,
-                ward_zone TEXT,
-                image_path TEXT,
-                status TEXT DEFAULT 'pending',
-                priority TEXT DEFAULT 'low',
-                ai_category TEXT,
-                ai_score REAL DEFAULT 0.0
+        CREATE TABLE IF NOT EXISTS complaints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT,             -- Encrypted PII
+            phone_number TEXT,          -- Encrypted PII
+            text_desc TEXT,             -- Translated English Context
+            image_path TEXT,            -- Physical Evidence
+            status TEXT DEFAULT 'pending', -- pending -> verified -> assigned -> resolved
+            priority TEXT,              -- Triage Level
+            ai_category TEXT,           -- Department Mapping
+            ai_score REAL,               -- Risk Index (1-10)
+            ward_zone TEXT,             -- Resolved Jurisdiction (Geopy)
+            latitude REAL,
+            longitude REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            verified_at TIMESTAMP,
+            assigned_at TIMESTAMP,
+            deadline_at TIMESTAMP,      -- THE PROCRASTINATION KILLER
+            resolved_at TIMESTAMP,      -- THE AUDIT TRAIL
+            resolution_image_path TEXT, -- THE PROOF OF FIX
+            contractor_id TEXT          -- Auto-assigned Contractor
         )
     ''')
-    # Unified Identity Tables (Citizens & Officers)
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_config (
+            id INTEGER PRIMARY KEY,
+            administrative_scope TEXT, -- Panchayat/Municipal
+            category_mapping TEXT,     -- JSON string mapping category to Desk ID
+            sla_hours INTEGER          -- Default SLA hours
+        )
+    ''')
+
+
+    # 2. INTEGRATE TEAMMATE'S IDENTITY TABLES
+    # This calls the function in your teammate's verification.py file
     init_verification_db(cursor)
     
     conn.commit()
@@ -155,7 +192,7 @@ async def send_otp(data: OTPRequest):
 
 @app.post("/api/verify-otp")
 async def verify_otp(data: VerifyRequest):
-    """Revolutionary Developer: Verify OTP and Grant Session Token"""
+    """Teammate's Stable OTP Verification Logic with Admin Moulding"""
     record = auth_context.get(data.email)
     
     if not record or datetime.now() > record["expiry"]:
@@ -166,9 +203,29 @@ async def verify_otp(data: VerifyRequest):
     
     record["verified"] = True
     
-    # Generate JWT for the session
+    # Administrative Moulding: Fetch Role and Ward from DB
+    admin_role = "Desk_Officer"
+    ward = "General"
+    
+    if record["role"] == "government":
+        conn = sqlite3.connect(DATABASE_PATH)
+        user_data = conn.execute(
+            "SELECT role, ward, is_setup_complete FROM government_officers WHERE email = ?", 
+            (data.email,)
+        ).fetchone()
+        conn.close()
+        if user_data:
+            admin_role = user_data[0] # Usually 'Admin' or 'Desk_Officer'
+            ward = user_data[1]
+            is_setup_complete = user_data[2]
+        else:
+            is_setup_complete = 0
+    else:
+        is_setup_complete = 0
+
+    # Simple Token Generation
     access_token = create_access_token(
-        data={"sub": data.email, "role": record["role"]},
+        data={"sub": data.email, "role": record["role"], "admin_role": admin_role},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
@@ -176,8 +233,14 @@ async def verify_otp(data: VerifyRequest):
         "status": "success", 
         "token": access_token,
         "role": record["role"], 
+        "admin_role": admin_role,
+        "ward": ward,
+        "is_setup_complete": is_setup_complete,
         "message": "Identity verified successfully"
     }
+
+
+
 
 @app.post("/register/citizen")
 async def register_citizen(data: CitizenFinal):
@@ -208,11 +271,12 @@ async def register_government(
     ward: str = Form(...),
     uid: str = Form(...),
     password: str = Form(...),
+    admin_role: str = Form("Desk_Officer"), # Default to Desk_Officer
     proof: UploadFile = File(...)
 ):
     """Revolutionary Developer: Secure Government Officer Registration"""
     if not auth_context.get(email, {}).get("verified"):
-        raise HTTPException(status_code=403, detail="Email verification required first.")
+        raise HTTPException(status_code=403, detail="STRICT: Email verification required first.")
 
     # Save Proof of Employment
     os.makedirs("gov_proofs", exist_ok=True)
@@ -224,16 +288,22 @@ async def register_government(
     conn = sqlite3.connect(DATABASE_PATH)
     try:
         conn.execute(
-            "INSERT INTO government_officers (name, email, phone, ward, uid_number, proof_path, password_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (name, email, phone, ward, uid, proof_path, hash_password(password))
+            "INSERT INTO government_officers (name, email, phone, ward, uid_number, proof_path, password_hash, admin_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, email, phone, ward, uid, proof_path, hash_password(password), admin_role)
         )
         conn.commit()
-        send_email(email, "Welcome Officer", f"Hello {name}, your Nivaran Officer account is created!")
-        return {"status": "success", "redirect_to": "/dashboard"}
+        
+        # Cleanup verification context
+        if email in auth_context:
+            del auth_context[email]
+            
+        send_email(email, "Welcome Officer", f"Hello {name}, your Nivaran Officer account is created! Role: {admin_role}")
+        return {"status": "success", "redirect_to": "/dashboard", "is_setup_complete": 0}
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="Officer already exists.")
     finally:
         conn.close()
+
 
 # --- 6. MAIN COMPLAINT ROUTE (PROTECTED BY OTP) ---
 
@@ -326,24 +396,53 @@ async def run_task_back(complaint_id: int, file_loc: str, description: str, loca
 
         logic_result = prioritize_complaint(description, ai_result, latitude, longitude, location)
 
-        # --- UPDATE DATABASE WITH AI RESULTS ---
+        # --- FETCH SYSTEM CONFIG FOR AUTO-ASSIGNMENT ---
         conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT category_mapping, sla_hours FROM system_config LIMIT 1")
+        config = cursor.fetchone()
+        
+        contractor_id = "Default_Contractor"
+        deadline_timestamp = None
+        
+        if config:
+            import json
+            category_mapping = json.loads(config[0]) if config[0] else {}
+            sla_hours = config[1] or 24
+            contractor_id = category_mapping.get(logic_result['category'], "General_Desk")
+            deadline_timestamp = (datetime.now() + timedelta(hours=sla_hours)).isoformat()
+
+        # --- UPDATE DATABASE WITH AI RESULTS & AUTO-ASSIGNMENT ---
         conn.execute('''
         UPDATE complaints SET 
         status='verified', 
         priority=?, 
         ai_category=?, 
         ai_score=?, 
-        ward_zone=?  -- This column stores the resolved Geopy Jurisdiction
+        ward_zone=?,
+        verified_at=CURRENT_TIMESTAMP,
+        assigned_at=CURRENT_TIMESTAMP,
+        deadline_at=?,
+        contractor_id=?
         WHERE id=?
-        ''', (logic_result['priority'], logic_result['category'], logic_result['score'], logic_result['jurisdiction'], complaint_id))
+        ''', (
+            logic_result['priority'], 
+            logic_result['category'], 
+            logic_result['score'], 
+            logic_result['jurisdiction'], 
+            deadline_timestamp,
+            contractor_id,
+            complaint_id
+        ))
 
         conn.commit()
         conn.close()
-        print(f"Complaint {complaint_id} Verified: {logic_result}")
+        print(f"Complaint {complaint_id} Verified & Auto-Assigned with SLA: {sla_hours}h")
+
 
     except Exception as e:
         print(f"Background Task Error: {e}")
+
 
 # --- 7. GOVT LOGIN (JWT ENABLED) ---
 @app.post("/login")
@@ -354,9 +453,19 @@ async def login(
     print(f"Testing SECURE Login: {form_data.username}")
     
     # In a real app, verify against hashed password in DB
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT admin_role, is_setup_complete FROM government_officers WHERE email = ?", (form_data.username,))
+    user_data = cursor.fetchone()
+    conn.close()
+    
+    admin_role = user_data[0] if user_data else "Desk_Officer"
+    is_setup_complete = user_data[1] if user_data else 0
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": form_data.username}, expires_delta=access_token_expires
+        data={"sub": form_data.username, "admin_role": admin_role}, 
+        expires_delta=access_token_expires
     )
     
     return {
@@ -364,8 +473,80 @@ async def login(
         "token_type": "bearer",
         "status": "success",
         "user": form_data.username,
+        "admin_role": admin_role,
+        "is_setup_complete": is_setup_complete,
         "message": "Access Granted"
     }
+
+@app.get("/api/v1/system/status")
+async def get_system_status(current_user: str = Depends(get_current_user)):
+    """Gatekeeper Logic: Check if the logged-in admin has completed system_config."""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT is_setup_complete FROM government_officers WHERE email = ?", (current_user,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    is_complete = result[0] if result else 0
+    return {"is_setup_complete": is_complete}
+
+@app.post("/api/v1/system/configure")
+async def configure_system(
+    scope: str = Form(...),
+    mapping: str = Form(...), # JSON string
+    sla: int = Form(...),
+    admin: str = Depends(check_admin_authority)
+):
+    """Admin configuration authority"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM system_config")
+    cursor.execute(
+        "INSERT INTO system_config (administrative_scope, category_mapping, sla_hours) VALUES (?, ?, ?)",
+        (scope, mapping, sla)
+    )
+    # Mark setup as complete for this admin
+    cursor.execute(
+        "UPDATE government_officers SET is_setup_complete = 1 WHERE email = ?",
+        (admin,)
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "System Moulded."}
+
+@app.get("/api/v1/system/config")
+async def get_system_config(current_user: str = Depends(get_current_user)):
+    """Fetch for UI Moulding (Protected)"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    config = conn.execute("SELECT * FROM system_config LIMIT 1").fetchone()
+    conn.close()
+    return dict(config) if config else {}
+
+
+@app.patch("/resolve-grievance/{id}")
+async def resolve_grievance(
+    id: int,
+    after_photo: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    """Resolution Loop: Immutable Proof of Fix Required"""
+    os.makedirs("uploads/resolutions", exist_ok=True)
+    res_path = f"uploads/resolutions/{id}_{after_photo.filename}"
+    content = await after_photo.read()
+    with open(res_path, "wb") as f:
+        f.write(content)
+        
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE complaints SET status='resolved', resolved_at=CURRENT_TIMESTAMP, resolution_image_path=? WHERE id=?",
+        (res_path, id)
+    )
+    conn.commit()
+    conn.close()
+    return {"message": "Grievance resolved with physical evidence."}
+
 
 # Route for Government Officials to view complaints (Filtered by Category and Ward)
 @app.get("/get-complaints")
@@ -393,26 +574,35 @@ async def get_complaints(
             comp_dict = dict(row)
             try:
                 # DECRYPT DATA FOR DISPLAY (PII HARDENING)
-                full_name = decrypt_data(comp_dict["full_name"])
-                phone = str(decrypt_data(comp_dict["phone_number"]))
+                raw_name = decrypt_data(comp_dict["full_name"])
+                raw_phone = str(decrypt_data(comp_dict["phone_number"]))
                 
                 # DATA MASKING: Only last 3 digits visible
-                masked_phone = ("*" * (len(phone) - 3)) + phone[-3:]
+                masked_phone = ("*" * (len(raw_phone) - 3)) + raw_phone[-3:] if len(raw_phone) >= 3 else raw_phone
                 
-                comp_dict["full_name"] = full_name
+                # Top-Down Configuration Authority: Label Mapping
+                comp_dict["Administrative Domain"] = comp_dict.get("ai_category")
+                comp_dict["Public Risk Index"] = comp_dict.get("ai_score")
+                
+                comp_dict["full_name"] = raw_name
                 comp_dict["phone_number"] = masked_phone
             except Exception as e:
                 print(f"Decryption error for record {comp_dict['id']}: {e}")
             
             complaints.append(comp_dict)
-            
+
+
         conn.close()
+
         return complaints
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 @app.get("/get-ward-stats")
-async def get_ward_stats(ward: str):
+async def get_ward_stats(
+    ward: str,
+    current_user: str = Depends(get_current_user)
+):
     try:
         conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
@@ -429,6 +619,7 @@ async def get_ward_stats(ward: str):
             "ward": ward,
             "stats": stats
         }
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -469,4 +660,4 @@ def home():
     return {"message": "Revolutionary AI Backend is running!!"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
