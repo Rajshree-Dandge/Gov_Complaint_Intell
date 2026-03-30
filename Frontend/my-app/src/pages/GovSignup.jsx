@@ -146,8 +146,8 @@ export default function GovSignup() {
       <div className="auth-card auth-card-wide">
         <div className="auth-header">
           <span className="auth-emblem">🏛️</span>
-          <h1>Government Registration</h1>
-          <p>Verify your official identity to proceed</p>
+          <h1>SOVEREIGN ENLISTMENT</h1>
+          <p>AUTHORIZE OFFICIAL IDENTITY</p>
         </div>
 
         {error && (
@@ -217,7 +217,7 @@ export default function GovSignup() {
             )}
 
             <button type="submit" className="btn-auth" disabled={submitting}>
-              {otpSent ? (submitting ? 'Verifying...' : 'Verify OTP') : (submitting ? 'Sending...' : 'Send Verification OTP')}
+              {otpSent ? (submitting ? 'Verifying...' : 'VERIFY SOVEREIGNTY') : (submitting ? 'Sending...' : 'INITIALIZE ENLISTMENT HANDSHAKE')}
             </button>
           </form>
         ) : (
@@ -254,12 +254,12 @@ export default function GovSignup() {
             </div>
 
 
-            <button type="submit" className="btn-auth" disabled={submitting}>Complete Registration</button>
+            <button type="submit" className="btn-auth" disabled={submitting}>FINALIZE SOVEREIGN IDENTITY</button>
           </form>
         )}
 
         <div className="auth-footer">
-          <Link to="/select-role">← Back to Role Selection</Link>
+          <Link to="/">← RETURN TO MAIN TERMINAL</Link>
         </div>
       </div>
     </div>

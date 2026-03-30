@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { Calendar, User } from 'lucide-react';
 import GrievanceMap from './Heatmap';
 import './GovernmentLanding.css';
 

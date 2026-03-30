@@ -28,7 +28,7 @@ def send_email(target, subject, body):
     msg['To'] = target
     try:
         # SYSTEMS ARCHITECT: Robust SMTP Pipeline with TLS & Handshake Timeout
-        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
         server.set_debuglevel(1)  # Enable debug for logging SMTP codes
         server.starttls()  # Upgrade connection to secure TLS
         

@@ -42,47 +42,18 @@
 
 /* ===== Brighter Theme ===== */
 :root {
-  --bg-page: hsl(220, 25%, 97%);
-  --bg-card: hsl(0, 0%, 100%);
-  --bg-nav: hsl(220, 55%, 32%);
-  --bg-sidebar: hsl(0, 0%, 100%);
-  --bg-sidebar-active: hsl(220, 50%, 94%);
-  --bg-input: hsl(220, 25%, 97%);
-  --bg-hover: hsl(220, 25%, 95%);
-  --bg-modal: hsl(0, 0%, 100%);
-  --bg-badge: hsl(220, 40%, 93%);
-  --bg-ai-bot: hsl(220, 25%, 97%);
-  --bg-ai-msg-bot: hsl(220, 25%, 94%);
-  --bg-ai-msg-user: hsl(220, 55%, 32%);
-
-  --text-primary: hsl(220, 25%, 15%);
-  --text-secondary: hsl(220, 10%, 45%);
-  --text-heading: hsl(220, 30%, 12%);
-  --text-nav: hsl(0, 0%, 100%);
-  --text-nav-dim: hsla(0, 0%, 100%, 0.85);
-  --text-muted: hsl(220, 10%, 55%);
-  --text-on-primary: hsl(0, 0%, 100%);
-  --text-ai-user: hsl(0, 0%, 100%);
-
-  --border-light: hsl(220, 20%, 92%);
-  --border-card: hsl(220, 18%, 90%);
-  --border-input: hsl(220, 18%, 86%);
-  --border-sidebar: hsl(220, 15%, 93%);
-
-  --accent-teal: hsl(220, 65%, 42%);
-  --accent-teal-light: hsl(220, 50%, 94%);
-  --accent-blue: hsl(210, 70%, 50%);
-  --accent-orange: hsl(30, 85%, 55%);
-  --accent-purple: hsl(260, 55%, 55%);
-  --accent-green: hsl(145, 60%, 40%);
-  --accent-red: hsl(0, 70%, 55%);
-  --accent-yellow: hsl(45, 90%, 55%);
-
-  --shadow-card: 0 2px 12px hsla(220, 30%, 20%, 0.06);
-  --shadow-modal: 0 20px 60px hsla(0, 0%, 0%, 0.15);
-
-  --sidebar-active-text: hsl(220, 65%, 42%);
-  --sidebar-active-border: hsl(220, 65%, 42%);
+  --bg-page: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-nav: #1E293B;
+  --bg-sidebar: #FFFFFF;
+  --bg-sidebar-active: #F0F9FF;
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --text-heading: #1E293B;
+  --accent-teal: #10B981;
+  --accent-green: #10B981;
+  --accent-red: #DC2626;
+  --shadow-card: 0 10px 30px -5px rgba(30, 41, 59, 0.05);
 }
 
 body.dark-mode {

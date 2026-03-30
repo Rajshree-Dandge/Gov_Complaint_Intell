@@ -97,7 +97,7 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
       
       setTimeout(() => {
           if (finalRole === 'government') {
-            navigate('/dashboard');
+            navigate('/gov-landing');
           } else if (finalRole === 'citizen') {
             navigate('/citizen');
           } else {
@@ -128,8 +128,8 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
       <div className="auth-card">
         <div className="auth-header">
           <span className="auth-emblem">{icon}</span>
-          <h1>{title}</h1>
-          <p>Secure Access via OTP</p>
+          <h1>GOVERNMENT COMMAND</h1>
+          <p>SOVEREIGN IDENTITY PROTOCOL</p>
         </div>
 
         {error && (
@@ -182,7 +182,7 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
               />
             </div>
             <button type="submit" className="btn-auth" disabled={submitting || otpTimer > 0}>
-              {submitting ? 'Verifying...' : otpTimer > 0 ? `Wait ${otpTimer}s` : 'Send Login OTP'}
+              {submitting ? 'Authenticating...' : otpTimer > 0 ? `Wait ${otpTimer}s` : 'INITIALIZE SOVEREIGN HANDSHAKE'}
             </button>
           </form>
         ) : (
@@ -201,7 +201,7 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
               />
             </div>
             <button type="submit" className="btn-auth" disabled={submitting}>
-              {submitting ? 'Verifying...' : 'Verify & Sign In'}
+              {submitting ? 'Verifying Protocol...' : 'AUTHORIZE SOVEREIGN ENTRY'}
             </button>
             <div className="otp-resend">
               {otpTimer > 0 ? (
@@ -218,7 +218,7 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
           <button onClick={()=>{navigate(signupPath)}}>Sign Up</button>
         </div>
         <div className="auth-footer">
-          <Link to="/select-role">← Back to Role Selection</Link>
+          <Link to="/">← RETURN TO MAIN TERMINAL</Link>
         </div>
       </div>
     </div>
