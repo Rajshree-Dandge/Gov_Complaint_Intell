@@ -84,7 +84,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
 async def check_admin_authority(current_user: str = Depends(get_current_user)):
     """Strict Backend Provision: Admin Gatekeeping."""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(GOVT_DB)
     cursor = conn.cursor()
     # Teammate logic uses 'role' or a specific flag
     cursor.execute("SELECT role FROM government_officers WHERE email = ?", (current_user,))
@@ -592,8 +592,12 @@ async def run_task_back(complaint_id: int, file_loc: str, description: str, loca
         # --- FETCH SYSTEM CONFIG FOR AUTO-ASSIGNMENT ---
         conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT category_mapping, sla_hours FROM system_config LIMIT 1")
-        config = cursor.fetchone()
+        
+        gconn = sqlite3.connect(GOVT_DB)
+        gcursor = gconn.cursor()
+        gcursor.execute("SELECT category_mapping, sla_hours FROM system_config LIMIT 1")
+        config = gcursor.fetchone()
+        gconn.close()
         
         contractor_id = "Default_Contractor"
         deadline_timestamp = None
@@ -650,7 +654,7 @@ async def login(
     print(f"Testing SECURE Login: {form_data.username}")
     
     # Top-Down Authority Check: Determine setup status from system_config
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(GOVT_DB)
     cursor = conn.cursor()
     cursor.execute("SELECT admin_role FROM government_officers WHERE email = ?", (form_data.username,))
     user_data = cursor.fetchone()
@@ -680,7 +684,7 @@ async def login(
 @app.get("/api/v1/user/profile")
 async def get_user_profile(current_user: str = Depends(get_current_user)):
     """Administrative Identity Check: Returns profile details including setup status."""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(GOVT_DB)
     cursor = conn.cursor()
     cursor.execute("SELECT admin_role, location FROM government_officers WHERE email = ?", (current_user,))
     user_data = cursor.fetchone()
@@ -772,7 +776,7 @@ async def configure_system(
 @app.get("/api/v1/system/config")
 async def get_system_config(current_user: str = Depends(get_current_user)):
     """Fetch for UI Moulding (Protected)"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(GOVT_DB)
     conn.row_factory = sqlite3.Row
     config = conn.execute("SELECT * FROM system_config LIMIT 1").fetchone()
     conn.close()
@@ -840,8 +844,11 @@ async def get_complaints(
         search_term = f"%{category.split(' ')[0]}%" if category else "%%"
 
         # Fetch system scope for label bridging
-        config = cursor.execute("SELECT administrative_scope FROM system_config LIMIT 1").fetchone()
+        gconn = sqlite3.connect(GOVT_DB)
+        gcursor = gconn.cursor()
+        config = gcursor.execute("SELECT administrative_scope FROM system_config LIMIT 1").fetchone()
         scope = config[0] if config else "Municipal"
+        gconn.close()
 
         cursor.execute('''
             SELECT * FROM complaints 
