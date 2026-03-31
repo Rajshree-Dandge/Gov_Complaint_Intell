@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -7,26 +8,26 @@ import './AuthPage.css';
 
 export default function GovSignup() {
   const navigate = useNavigate();
-  const { error, setError } = useAuth(); // Keep hook structure exactly the same
+  const { error, setError } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const fileRef = useRef(null);
 
-  // States for OTP and flow
-  const [step, setStep] = useState('verification'); 
+  // States for multi-step flow
+  const [step, setStep] = useState('verification'); // verification -> location -> roles -> documents
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpTimer, setOtpTimer] = useState(0);
-  const [isVerified, setIsVerified] = useState(false);
-  
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [proofFile, setProofFile] = useState(null);
+  
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', ward: '', uid: '', password: '', confirmPassword: '', admin_role: 'Desk_Officer'
+    name: '', email: '', phone: '', uid: '', password: '', confirmPassword: '',
+    location: '', role: 'government', designation: '' // Ensure default role is set
   });
 
+  const rolesList = ['Sarpanch', 'Desk 1 Officer', 'Desk 2 Officer', 'Gram Sevak', 'Tehsildar'];
 
-  // Handle Resend Timer
   useEffect(() => {
     if (otpTimer > 0) {
       const interval = setInterval(() => setOtpTimer(t => t - 1), 1000);
@@ -36,23 +37,45 @@ export default function GovSignup() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.size <= 10 * 1024 * 1024) setProofFile(file);
-    else setError('File must be under 10MB');
+  // --- UPDATED: Get Current Location with Permission Dialog ---
+  const handleGetLocation = () => {
+    setError('');
+    setSuccessMsg('');
+    
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude.toFixed(6);
+          const lng = pos.coords.longitude.toFixed(6);
+          const coords = `${lat}, ${lng}`;
+          
+          setForm({ ...form, location: coords });
+          setSuccessMsg("Location captured successfully.");
+        },
+        (err) => {
+          if (err.code === 1) {
+            setError("Permission denied. Please allow location access in browser settings.");
+          } else {
+            setError("Unable to retrieve location. Please check your GPS/Network.");
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } else {
+      setError("Geolocation is not supported by this browser.");
+    }
   };
 
+<<<<<<< HEAD
   // Systems Architect: OTP Decoupling with Axios Fail-Fast
+=======
+>>>>>>> 86870950f126e5db52c8b2efa8826687186f41e5
   const handleRequestOtp = async (e) => {
     e.preventDefault();
-    if (!form.email || !form.name || !form.phone) {
-      setError('Please fill Name, Email, and Phone to receive OTP');
-      return;
-    }
-    
     setSubmitting(true);
     setError('');
     try {
+<<<<<<< HEAD
       const response = await axios.post('http://localhost:8000/api/send-otp', { 
           email: form.email.trim(),
           name: form.name.trim(),
@@ -76,13 +99,26 @@ export default function GovSignup() {
 
   
   // Systems Architect: Sub-second Verification handshake
+=======
+      const response = await fetch('http://localhost:8001/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email.trim(), name: form.name.trim(), role: 'government', is_signup: true }),
+      });
+      if (!response.ok) throw new Error('Failed to send OTP');
+      setOtpSent(true);
+      setOtpTimer(60);
+      setSuccessMsg('OTP sent to your email.');
+    } catch (err) { setError(err.message); }
+    finally { setSubmitting(false); }
+  };
+
+>>>>>>> 86870950f126e5db52c8b2efa8826687186f41e5
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
-    if (otp.length < 6) return setError('Enter the 6-digit code');
-
     setSubmitting(true);
-    setError('');
     try {
+<<<<<<< HEAD
       const verifyRes = await axios.post('http://localhost:8000/api/verify-otp', { 
           email: form.email.trim(), 
           code: otp.trim() 
@@ -100,18 +136,28 @@ export default function GovSignup() {
     } finally {
       setSubmitting(false);
     }
+=======
+      const verifyRes = await fetch('http://localhost:8001/api/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email.trim(), code: otp.trim() }),
+      });
+      if (!verifyRes.ok) throw new Error('Invalid OTP');
+      setStep('location');
+      setSuccessMsg('');
+    } catch (err) { setError(err.message); }
+    finally { setSubmitting(false); }
+>>>>>>> 86870950f126e5db52c8b2efa8826687186f41e5
   };
 
-  const handleSubmit = async (e) => {
+  // --- UPDATED: handleSubmitFinal to match Backend Form Fields exactly ---
+  const handleSubmitFinal = async (e) => {
     e.preventDefault();
-    setError('');
-    
-    if (!proofFile) return setError('Proof of government employment is required');
-    if (form.password !== form.confirmPassword) return setError('Passwords do not match');
-
     setSubmitting(true);
+    setError('');
     try {
       const formData = new FormData();
+<<<<<<< HEAD
       formData.append('name', form.name);
       formData.append('email', form.email);
       formData.append('phone', form.phone);
@@ -136,6 +182,43 @@ export default function GovSignup() {
         }
     } finally {
       setSubmitting(false);
+=======
+      
+      // Explicitly append fields to avoid sending unnecessary data (like confirmPassword)
+      // and ensure keys match Python backend: async def register_gov(name, email, phone, location, designation, uid, password, proof)
+      formData.append('name', form.name.trim());
+      formData.append('email', form.email.trim());
+      formData.append('phone', form.phone || "Not Provided"); 
+      formData.append('location', form.location);
+      formData.append('designation', form.designation);
+      formData.append('uid', form.uid.trim());
+      formData.append('password', form.password);
+      
+      if (proofFile) {
+        formData.append('proof', proofFile);
+      } else {
+        throw new Error("Please upload a proof document.");
+      }
+
+      const response = await fetch('http://localhost:8001/register/government', {
+        method: 'POST',
+        // IMPORTANT: Do NOT set headers manually for FormData; fetch sets boundary automatically
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || 'Registration failed');
+      }
+
+      setSuccessMsg('Registration Complete!');
+      setTimeout(() => navigate('/govLanding'), 2000);
+    } catch (err) { 
+      setError(err.message); 
+    } finally { 
+      setSubmitting(false); 
+>>>>>>> 86870950f126e5db52c8b2efa8826687186f41e5
     }
   };
 
@@ -143,11 +226,16 @@ export default function GovSignup() {
     <div className="auth-page">
       <button className="auth-theme-toggle" onClick={toggleTheme}>{isDark ? '☀️' : '🌙'}</button>
 
-      <div className="auth-card auth-card-wide">
+      <div className="auth-card auth-card-wide overflow-hidden">
         <div className="auth-header">
           <span className="auth-emblem">🏛️</span>
+<<<<<<< HEAD
           <h1>SOVEREIGN ENLISTMENT</h1>
           <p>AUTHORIZE OFFICIAL IDENTITY</p>
+=======
+          <h1>Government Registration</h1>
+          <p>{step === 'verification' ? 'Verify Identity' : step === 'location' ? 'Office Details' : 'Finalize Profile'}</p>
+>>>>>>> 86870950f126e5db52c8b2efa8826687186f41e5
         </div>
 
         {error && (
@@ -177,42 +265,49 @@ export default function GovSignup() {
         )}
         {successMsg && <div className="auth-success" style={{background: '#ECFDF5', color: '#065F46', borderLeft: '4px solid #10B981'}}>{successMsg}</div>}
 
-        {/* STEP 1: VERIFICATION */}
-        {step === 'verification' ? (
-          <form className="auth-form" onSubmit={otpSent ? handleVerifyOtp : handleRequestOtp}>
-            <div className="auth-row">
-              <div className="auth-field">
-                <label>Full Name</label>
-                <input type="text" name="name" value={form.name} onChange={handleChange} required disabled={otpSent} />
-              </div>
-              <div className="auth-field">
-                <label>Official Email</label>
-                <input type="email" name="email" value={form.email} onChange={handleChange} required disabled={otpSent} />
-              </div>
+        <div className="step-container">
+          {step === 'verification' && (
+            <div className="step-slide-in">
+              <form className="auth-form" onSubmit={otpSent ? handleVerifyOtp : handleRequestOtp}>
+                <div className="auth-field"><label>Full Name</label>
+                <input type="text" name="name" value={form.name} onChange={handleChange} required disabled={otpSent} /></div>
+                <div className="auth-field"><label>Official Email</label>
+                <input type="email" name="email" value={form.email} onChange={handleChange} required disabled={otpSent} /></div>
+                {otpSent && (
+                  <input type="text" className="otp-input-large" value={otp} onChange={e => setOtp(e.target.value)} placeholder="000000" />
+                )}
+                <button type="submit" className="btn-auth" disabled={submitting}>
+                  {otpSent ? (submitting ? 'Verifying...' : 'Verify OTP') : (submitting ? 'Sending...' : 'Send OTP')}
+                </button>
+              </form>
             </div>
-            
-            <div className="auth-field">
-                <label>Phone Number</label>
-                <input type="tel" name="phone" value={form.phone} onChange={handleChange} required disabled={otpSent} />
-            </div>
+          )}
 
-            {otpSent && (
-              <div className="otp-section">
-                <label>Verification Code</label>
-                <input 
-                  type="text" 
-                  className="otp-input-large" 
-                  value={otp} 
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                />
-                <div className="otp-resend">
-                   {otpTimer > 0 ? (
-                     <span>Resend in {otpTimer}s</span>
-                   ) : (
-                     <button type="button" onClick={handleRequestOtp}>Resend Code</button>
-                   )}
+          {step === 'location' && (
+            <div className="step-slide-in">
+              <form className="auth-form" onSubmit={(e) => { e.preventDefault(); setStep('roles'); }}>
+                <div className="auth-field">
+                  <label>Office Location (GPS Captured)</label>
+                  <div className="location-box" style={{ display: 'flex', gap: '10px' }}>
+                    <input 
+                      type="text" 
+                      value={form.location} 
+                      placeholder="Latitude, Longitude" 
+                      readOnly 
+                      required
+                      style={{ flex: 1 }}
+                    />
+                    <button 
+                      type="button" 
+                      onClick={handleGetLocation} 
+                      className="btn-location"
+                      style={{ padding: '0 15px', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                    >
+                      📍 Get Location
+                    </button>
+                  </div>
                 </div>
+<<<<<<< HEAD
               </div>
             )}
 
@@ -227,31 +322,42 @@ export default function GovSignup() {
                <div className="auth-field"><label>Ward Number</label>
                <input type="text" name="ward" value={form.ward} onChange={handleChange} required /></div>
                <div className="auth-field"><label>Identity UID</label>
+=======
+                <div className="auth-field"><label>Identity UID (Aadhaar/Service ID)</label>
+>>>>>>> 86870950f126e5db52c8b2efa8826687186f41e5
                 <input type="text" name="uid" value={form.uid} onChange={handleChange} required /></div>
+                <button type="submit" className="btn-auth" disabled={!form.location}>Proceed Further</button>
+              </form>
             </div>
+          )}
 
-            <div className="auth-field">
-                <label>Administrative Hierarchy Role</label>
-                <select name="admin_role" value={form.admin_role} onChange={handleChange} className="auth-select">
-                    <option value="Desk_Officer">Desk Officer (Field Worker)</option>
-                    <option value="Body_Admin">Body Admin (Commissioner/Sarpanch)</option>
-                </select>
-            </div>
-
-            <div className="auth-field">
-              <label>Proof of Employment (ID Card)</label>
-              <div className="proof-upload" onClick={() => fileRef.current?.click()}>
-                {proofFile ? <p>📎 {proofFile.name}</p> : <p>📄 Click to upload ID proof</p>}
-                <input ref={fileRef} type="file" onChange={handleFileChange} hidden />
+          {step === 'roles' && (
+            <div className="step-slide-in">
+              <div className="gov-post-grid">
+                {rolesList.map(r => (
+                  <button key={r} type="button" className={`post-btn ${form.designation === r ? 'active' : ''}`} 
+                    onClick={() => setForm({...form, designation: r})}>{r}</button>
+                ))}
               </div>
+              <button onClick={() => setStep('documents')} className="btn-auth" disabled={!form.designation}>Confirm Role</button>
             </div>
+          )}
 
-            <div className="auth-row">
-              <div className="auth-field"><label>Password</label>
-              <input type="password" name="password" value={form.password} onChange={handleChange} required autoComplete="new-password" /></div>
-              <div className="auth-field"><label>Confirm</label>
-              <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} required autoComplete="new-password" /></div>
+          {step === 'documents' && (
+            <div className="step-slide-in">
+              <form className="auth-form" onSubmit={handleSubmitFinal}>
+                <div className="auth-field">
+                  <label>Upload Official Appointment Letter / ID</label>
+                  <input type="file" onChange={(e) => setProofFile(e.target.files[0])} required />
+                </div>
+                <div className="auth-field"><label>Set Password</label>
+                <input type="password" name="password" value={form.password} onChange={handleChange} required /></div>
+                <button type="submit" className="btn-auth" disabled={submitting}>
+                  {submitting ? 'Registering...' : 'Complete Registration'}
+                </button>
+              </form>
             </div>
+<<<<<<< HEAD
 
 
             <button type="submit" className="btn-auth" disabled={submitting}>FINALIZE SOVEREIGN IDENTITY</button>
@@ -260,6 +366,13 @@ export default function GovSignup() {
 
         <div className="auth-footer">
           <Link to="/">← RETURN TO MAIN TERMINAL</Link>
+=======
+          )}
+        </div>
+
+        <div className="auth-footer">
+          <Link to="/select-role">← Back</Link>
+>>>>>>> 86870950f126e5db52c8b2efa8826687186f41e5
         </div>
       </div>
     </div>

@@ -356,3 +356,51 @@ body.dark-mode .auth-footer a { color: #94a3b8; }
   .auth-card { padding: 1.5rem; margin: 1rem; }
   .auth-header h1 { font-size: 1.3rem; }
 }
+
+/* Animation Container */
+.overflow-hidden { overflow: hidden; }
+
+.step-container {
+  position: relative;
+  min-height: 350px;
+}
+
+/* Slide Transition Logic */
+.step-slide-in {
+  animation: slideFromRight 0.5s ease-out forwards;
+}
+
+@keyframes slideFromRight {
+  from { opacity: 0; transform: translateX(50px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Location Box Styling */
+.location-box {
+  display: flex;
+  gap: 10px;
+}
+.btn-location {
+  padding: 0.5rem 1rem;
+  background: var(--primary-blue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Active Role Selection */
+.post-btn.active {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+/* Role Grid Adjustments */
+.gov-post-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
