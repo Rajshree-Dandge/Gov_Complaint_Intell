@@ -152,12 +152,21 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # --- CITIZEN DB (citizen.db): Citizens ---
+    cconn = sqlite3.connect("citizen.db")
+    ccursor = cconn.cursor()
+
     # --- GOVERNMENT DB (government.db): Officers, Auth, Config ---
     gconn = sqlite3.connect(GOVT_DB)
     gcursor = gconn.cursor()
 
     # Citizens and Officers identity tables
-    init_verification_db(gcursor)
+    init_verification_db(ccursor, gcursor)
+    
+    # Create indexing on ccursor before closing
+    ccursor.execute('CREATE INDEX IF NOT EXISTS idx_citizens_email ON citizens(email)')
+    cconn.commit()
+    cconn.close()
 
     gcursor.execute('''
         CREATE TABLE IF NOT EXISTS system_config (
@@ -191,7 +200,6 @@ def init_db():
     ''')
 
     # Performance Crack: Authentication Indexing for sub-50ms query speed
-    gcursor.execute('CREATE INDEX IF NOT EXISTS idx_citizens_email ON citizens(email)')
     gcursor.execute('CREATE INDEX IF NOT EXISTS idx_government_officers_email ON government_officers(email)')
     gcursor.execute("PRAGMA journal_mode=WAL")
     gconn.commit()
@@ -222,8 +230,8 @@ async def send_otp(data: OTPRequest, background_tasks: BackgroundTasks):
              raise HTTPException(status_code=400, detail="Email already registered. Please LOGIN to continue your setup.")
 
     if not data.is_signup:
-        # Citizens in government.db (citizens table), Officers in government.db
-        conn = sqlite3.connect(GOVT_DB)
+        db_file = GOVT_DB if role == "government" else "citizen.db"
+        conn = sqlite3.connect(db_file)
         table = "government_officers" if role == "government" else "citizens"
         # Teammate Logic: Strict database check
         user = conn.execute(f"SELECT name FROM {table} WHERE email = ?", (email,)).fetchone()
@@ -313,7 +321,7 @@ async def register_citizen(data: CitizenFinal):
     if not auth_context.get(email, {}).get("verified"):
         raise HTTPException(status_code=403, detail="Email not verified via OTP.")
 
-    conn = sqlite3.connect(GOVT_DB)  # Citizens table is in government.db
+    conn = sqlite3.connect("citizen.db")  # Citizens table is in citizen.db
     try:
         conn.execute(
             "INSERT INTO citizens (name, email, phone, uid_number, password_hash) VALUES (?, ?, ?, ?, ?)",
