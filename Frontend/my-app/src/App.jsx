@@ -3,7 +3,7 @@ import { ComplaintProvider } from "./context/ComplaintContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import ManualPage from "./pages/ManualPage";
-import RoleSelection from "./pages/RoleSelection";
+// import RoleSelection from "./pages/RoleSelection";
 import LoginPage from "./pages/LoginPage";
 import CitizenSignup from "./pages/CitizenSignup";
 import GovSignup from "./pages/GovSignup";
@@ -15,6 +15,7 @@ import CitizenProtectedRoute from "./components/CitizenProtectedRoute";
 // import NotFound from "./pages/NotFound";
 
 import GovernmentLanding from "./pages/GovernmentLanding";
+import AdminOnboarding from "./pages/AdminOnboarding";
 
 const App = () => (
   <ThemeProvider>
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/login" element={<LoginPage defaultRole="government" />} />
             <Route path="/citizen-signup" element={<CitizenSignup />} />
             <Route path="/gov-signup" element={<GovSignup />} />
+            <Route path="/admin-onboarding" element={<AdminOnboarding />} />
 
             <Route path="/citizen" element={<CitizenProtectedRoute><CitizenComplaint /></CitizenProtectedRoute>} />
             <Route path="/gov-landing" element={<ProtectedRoute allowedRole="government"><GovernmentLanding /></ProtectedRoute>} />

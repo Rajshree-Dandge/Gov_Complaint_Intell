@@ -9,10 +9,10 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
   const navigate = useNavigate();
   const { login, error, setError } = useAuth(); // Renamed setLocalUser to login
   const { isDark, toggleTheme } = useTheme();
-  
-  const [step, setStep] = useState('credentials'); 
+
+  const [step, setStep] = useState('credentials');
   const [email, setEmail] = useState('');
-  const [name, setName] = useState(''); 
+  const [name, setName] = useState('');
   const [otp, setOtp] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [otpTimer, setOtpTimer] = useState(0);
@@ -30,41 +30,41 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!email.trim() || !name.trim()) {
-        setError('Please enter both Name and Email');
-        return;
+      setError('Please enter both Name and Email');
+      return;
     }
-    
+
     setSubmitting(true);
     setError('');
     try {
-        // SYSTEMS ARCHITECT: Axios Timeout Layer for Zero-Latency FAIL-FAST
-        const response = await axios.post('http://localhost:8000/api/send-otp', {
-            email: email.trim(), 
-            name: name.trim(),
-            role: defaultRole,
-            is_signup: false
-        }, { timeout: 30000 });
+      // SYSTEMS ARCHITECT: Axios Timeout Layer for Zero-Latency FAIL-FAST
+      const response = await axios.post('http://127.0.0.1:8000/api/send-otp', {
+        email: email.trim(),
+        name: name.trim(),
+        role: defaultRole,
+        is_signup: false
+      }, { timeout: 30000 });
 
-        if (response.status === 429) {
-            setError(response.data.detail || 'Access restricted. Please wait.');
-            setOtpTimer(60); 
-            return;
-        }
-
-        setStep('otp');
+      if (response.status === 429) {
+        setError(response.data.detail || 'Access restricted. Please wait.');
         setOtpTimer(60);
-        setSuccessMsg(`User verified as ${defaultRole}. OTP sent to email.`);
+        return;
+      }
+
+      setStep('otp');
+      setOtpTimer(60);
+      setSuccessMsg(`User verified as ${defaultRole}. OTP sent to email.`);
     } catch (err) {
-        // FAIL-FAST logic with Retry failover
-        if (err.code === 'ECONNABORTED' || err.message.toLowerCase().includes('timeout')) {
-            setError('Connection Timed Out. Please Retry.');
-        } else {
-            setError(err.response?.data?.detail || err.message);
-        }
+      // FAIL-FAST logic with Retry failover
+      if (err.code === 'ECONNABORTED' || err.message.toLowerCase().includes('timeout')) {
+        setError('Connection Timed Out. Please Retry.');
+      } else {
+        setError(err.response?.data?.detail || err.message);
+      }
     } finally {
-        setSubmitting(false);
+      setSubmitting(false);
     }
-};
+  };
 
   const handleVerifyAndLogin = async (e) => {
     e.preventDefault();
@@ -75,13 +75,14 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
     try {
       // SYSTEMS ARCHITECT: Sub-50ms Optimized Verification Handshake
       const verifyRes = await axios.post('http://localhost:8000/api/verify-otp', {
-          email: email.trim(), 
-          code: otp.trim() 
+        email: email.trim(),
+        code: otp.trim()
       }, { timeout: 30000 });
 
       const result = verifyRes.data;
 
       const finalRole = result.role.trim().toLowerCase();
+      // Update Auth State using the new login function (userData, token)
       // Update Auth State using the new login function (userData, token)
       login({
         email: email.trim(),
@@ -89,28 +90,37 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
         role: finalRole,
         admin_role: result.admin_role || "Desk_Officer",
         ward: result.ward || "General",
+        onboarding_step: result.onboarding_step || 1,
         is_setup_complete: result.is_setup_complete || 0
       }, result.token);
 
-
       setSuccessMsg('Login Successful!');
-      
+
       setTimeout(() => {
-          if (finalRole === 'government') {
-            navigate('/gov-landing');
-          } else if (finalRole === 'citizen') {
-            navigate('/citizen');
+        if (finalRole === 'government') {
+          // SOVEREIGN REDIRECTION: If setup is incomplete, target for moulding
+          if ((result.is_setup_complete || 0) === 0) {
+            if ((result.onboarding_step || 1) > 1) {
+              navigate('/admin-onboarding');
+            } else {
+              navigate('/gov-signup');
+            }
           } else {
-            setError('Unknown user role. Contact support.');
+            navigate('/gov-landing');
           }
-      }, 1000);
-      
-    } catch (err) {
-        if (err.code === 'ECONNABORTED') {
-            setError('Verification Timed Out. Please Retry.');
+        } else if (finalRole === 'citizen') {
+          navigate('/citizen');
         } else {
-            setError(err.response?.data?.detail || err.message);
+          setError('Unknown user role. Contact support.');
         }
+      }, 1000);
+
+    } catch (err) {
+      if (err.code === 'ECONNABORTED') {
+        setError('Verification Timed Out. Please Retry.');
+      } else {
+        setError(err.response?.data?.detail || err.message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -133,52 +143,52 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
         </div>
 
         {error && (
-            <div className="auth-error" style={error.includes('Timed Out') ? {background: '#FF0000', color: '#fff', border: 'none', fontWeight: 'bold'} : {}}>
-                {error} 
-                {error.includes('Timed Out') && (
-                    <button 
-                        type="button" 
-                        style={{
-                            display: 'block', 
-                            width: '100%',
-                            marginTop: '0.75rem', 
-                            padding: '0.5rem',
-                            background: '#10B981', 
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer'
-                        }} 
-                        onClick={() => setError('')}
-                    >
-                        RETRY CONNECTION
-                    </button>
-                )}
-            </div>
+          <div className="auth-error" style={error.includes('Timed Out') ? { background: '#FF0000', color: '#fff', border: 'none', fontWeight: 'bold' } : {}}>
+            {error}
+            {error.includes('Timed Out') && (
+              <button
+                type="button"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  marginTop: '0.75rem',
+                  padding: '0.5rem',
+                  background: '#10B981',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setError('')}
+              >
+                RETRY CONNECTION
+              </button>
+            )}
+          </div>
         )}
-        {successMsg && <div className="auth-success" style={{background: '#ECFDF5', color: '#065F46', borderLeft: '4px solid #10B981'}}>{successMsg}</div>}
+        {successMsg && <div className="auth-success" style={{ background: '#ECFDF5', color: '#065F46', borderLeft: '4px solid #10B981' }}>{successMsg}</div>}
 
         {step === 'credentials' ? (
           <form className="auth-form" onSubmit={handleRequestOtp}>
             <div className="auth-field">
               <label>Full Name</label>
-              <input 
-                type="text" 
-                value={name} 
-                onChange={e => setName(e.target.value)} 
-                placeholder="Enter registered name" 
-                required 
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Enter registered name"
+                required
               />
             </div>
             <div className="auth-field">
               <label>Email Address</label>
-              <input 
-                type="email" 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
-                placeholder="registered@email.com" 
-                required 
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="registered@email.com"
+                required
               />
             </div>
             <button type="submit" className="btn-auth" disabled={submitting || otpTimer > 0}>
@@ -215,7 +225,7 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
 
         <div className='auth-toggle'>
           Don't have an account?
-          <button onClick={()=>{navigate(signupPath)}}>Sign Up</button>
+          <button onClick={() => { navigate(signupPath) }}>Sign Up</button>
         </div>
         <div className="auth-footer">
           <Link to="/">← RETURN TO MAIN TERMINAL</Link>

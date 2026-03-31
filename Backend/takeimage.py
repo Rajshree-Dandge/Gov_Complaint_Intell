@@ -27,13 +27,8 @@ from verification import (
 load_dotenv()
 
 # --- 2. SECURITY CONFIGURATION ---
-DATABASE_PATH = os.getenv("DATABASE_PATH", "grievance.db")
-SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-government-key")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
-# --- 2. INDUSTRIAL-GRADE SECURITY CONFIGURATION ---
-DATABASE_PATH = os.getenv("DATABASE_PATH", "grievance.db")
+DATABASE_PATH = os.getenv("DATABASE_PATH", "grievance.db")   # Complaints & core data
+GOVT_DB = os.getenv("GOVT_DB_PATH", "government.db")          # Officers, auth, system_config
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-government-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -122,10 +117,10 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # --- 4. DATABASE INITIALIZATION ---
 def init_db():
     """Revolutionary Architect: Unified Schema for Integrity & Accountability"""
+    
+    # --- GRIEVANCE DB (grievance.db): Complaints table ---
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS complaints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,27 +145,41 @@ def init_db():
             contractor_id TEXT
         )
     ''')
-    
-    # 2. INTEGRATE TEAMMATE'S IDENTITY TABLES (CRITICAL FIX: Tables must exist before indexing email)
-    init_verification_db(cursor)
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_ward ON complaints(ward_zone)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_ai_score ON complaints(ai_score)')
+    cursor.execute("PRAGMA journal_mode=WAL")
+    conn.commit()
+    conn.close()
 
-    cursor.execute('''
+    # --- GOVERNMENT DB (government.db): Officers, Auth, Config ---
+    gconn = sqlite3.connect(GOVT_DB)
+    gcursor = gconn.cursor()
+
+    # Citizens and Officers identity tables
+    init_verification_db(gcursor)
+
+    gcursor.execute('''
         CREATE TABLE IF NOT EXISTS system_config (
             id INTEGER PRIMARY KEY,
+            admin_email TEXT,
+            admin_name TEXT,
             administrative_scope TEXT,
             category_mapping TEXT,
-            sla_hours INTEGER,
-            desk_officers INTEGER,
-            field_workers INTEGER
+            sla_hours INTEGER DEFAULT 24,
+            desk_officers INTEGER DEFAULT 5,
+            field_workers INTEGER DEFAULT 20
         )
     ''')
-
-
-    # 2. INTEGRATE TEAMMATE'S IDENTITY TABLES (CRITICAL: Must exist before Indexing)
-    init_verification_db(cursor)
+    # --- MIGRATION: Add admin columns if schema is older ---
+    for col, defn in [("admin_email", "TEXT"), ("admin_name", "TEXT")]:
+        try:
+            gcursor.execute(f"ALTER TABLE system_config ADD COLUMN {col} {defn}")
+        except Exception:
+            pass
 
     # Persistent Auth Context: Thread-Safe SQLite Storage for OTPs
-    cursor.execute('''
+    gcursor.execute('''
         CREATE TABLE IF NOT EXISTS auth_otps (
             email TEXT PRIMARY KEY,
             code TEXT,
@@ -181,19 +190,13 @@ def init_db():
         )
     ''')
 
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_ward ON complaints(ward_zone)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_complaints_ai_score ON complaints(ai_score)')
-
     # Performance Crack: Authentication Indexing for sub-50ms query speed
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_citizens_email ON citizens(email)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_government_officers_email ON government_officers(email)')
-    
-    # 3. PERFORMANCE OPTIMIZATION: WAL MODE
-    cursor.execute("PRAGMA journal_mode=WAL")
-    
-    conn.commit()
-    conn.close()
+    gcursor.execute('CREATE INDEX IF NOT EXISTS idx_citizens_email ON citizens(email)')
+    gcursor.execute('CREATE INDEX IF NOT EXISTS idx_government_officers_email ON government_officers(email)')
+    gcursor.execute("PRAGMA journal_mode=WAL")
+    gconn.commit()
+    gconn.close()
+
 init_db()
 
 # --- 5. OTP & IDENTITY ROUTES ---
@@ -205,8 +208,22 @@ async def send_otp(data: OTPRequest, background_tasks: BackgroundTasks):
     name = data.name.strip()
     role = data.role.strip()
 
+    # IDENTITY INTEGRITY INITIATIVE: Check for existing records
+    if data.is_signup and role == "government":
+        conn = sqlite3.connect(GOVT_DB)  # Officers live in government.db
+        existing = conn.execute(
+            "SELECT name FROM government_officers WHERE email = ?", 
+            (email,)
+        ).fetchone()
+        conn.close()
+        
+        if existing:
+             # STRICT: If email exists, they MUST login to continue setup or access account
+             raise HTTPException(status_code=400, detail="Email already registered. Please LOGIN to continue your setup.")
+
     if not data.is_signup:
-        conn = sqlite3.connect(DATABASE_PATH)
+        # Citizens in government.db (citizens table), Officers in government.db
+        conn = sqlite3.connect(GOVT_DB)
         table = "government_officers" if role == "government" else "citizens"
         # Teammate Logic: Strict database check
         user = conn.execute(f"SELECT name FROM {table} WHERE email = ?", (email,)).fetchone()
@@ -247,22 +264,25 @@ async def verify_otp(data: VerifyRequest):
     
     record["verified"] = True
     
-    # Administrative Moulding: Check if system_config exists to flag setup completion
-    conn = sqlite3.connect(DATABASE_PATH)
+    # Administrative Moulding: Check government.db for officer status
+    conn = sqlite3.connect(GOVT_DB)  # government.db holds officers & system_config
     config_exists = conn.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
     
     admin_role = "Desk_Officer"
-    ward = "General"
-    is_setup_complete = 1  # DEPLOYMENT MODE: Standardized Production Standard
+    location = "General"
+    is_setup_complete = 1  
+    onboarding_step = 9 # Default for non-govt or fully onboarded
     
     if record["role"] == "government":
         user_data = conn.execute(
-            "SELECT admin_role, ward FROM government_officers WHERE email = ?", 
-            (data.email,)
+            "SELECT admin_role, location, onboarding_step, is_onboarded FROM government_officers WHERE email = ?", 
+            (data.email.lower(),)
         ).fetchone()
         if user_data:
-            admin_role = user_data[0] # Usually 'Admin' or 'Desk_Officer'
-            ward = user_data[1]
+            admin_role = user_data[0]
+            location = user_data[1]
+            onboarding_step = user_data[2] or 1
+            is_setup_complete = user_data[3] or 0 # Mapped is_onboarded to setup state
     conn.close()
 
     # Simple Token Generation
@@ -277,9 +297,10 @@ async def verify_otp(data: VerifyRequest):
         "token_type": "bearer",
         "role": record["role"], 
         "admin_role": admin_role,
-        "ward": ward,
+        "ward": location,
+        "onboarding_step": onboarding_step if record["role"] == "government" else 9,
         "is_setup_complete": is_setup_complete,
-        "message": "Identity verified successfully"
+        "message": "Protocol Authorized"
     }
 
 
@@ -292,7 +313,7 @@ async def register_citizen(data: CitizenFinal):
     if not auth_context.get(email, {}).get("verified"):
         raise HTTPException(status_code=403, detail="Email not verified via OTP.")
 
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(GOVT_DB)  # Citizens table is in government.db
     try:
         conn.execute(
             "INSERT INTO citizens (name, email, phone, uid_number, password_hash) VALUES (?, ?, ?, ?, ?)",
@@ -307,38 +328,139 @@ async def register_citizen(data: CitizenFinal):
     finally:
         conn.close()
 
+@app.get("/api/onboarding/status")
+async def get_onboarding_status(email: str):
+    """Sovereign State Machine: Retrieves persistent progress for government Officials."""
+    conn = sqlite3.connect(GOVT_DB)  # Officers live in government.db
+    user = conn.execute(
+        "SELECT onboarding_step, admin_body, specific_role, location, workspace_code, is_onboarded FROM government_officers WHERE email = ?", 
+        (email.lower(),)
+    ).fetchone()
+    conn.close()
+    
+    if not user:
+        return {"step": 1, "skip_otp": False}
+        
+    onboarding_step, admin_body, specific_role, location, workspace_code, is_onboarded = user
+    
+    # SOVEREIGN RESUMPTION "CRACK":
+    # If the email is already verified/exists but setup (onboarding) is incomplete, SKIP OTP
+    if is_onboarded == 0:
+        return {
+            "step": onboarding_step,
+            "skip_otp": True,
+            "message": "Welcome back! Resuming your Nivaran setup.",
+            "admin_body": admin_body,
+            "specific_role": specific_role,
+            "location": location,
+            "workspace_code": workspace_code
+        }
+        
+    return {
+        "step": onboarding_step,
+        "skip_otp": False,
+        "is_onboarded": 1
+    }
+
+@app.patch("/api/onboarding/update-step")
+async def update_onboarding_step(
+    email: str = Form(...),
+    step: int = Form(...),
+    field: Optional[str] = Form(None),
+    value: Optional[str] = Form(None)
+):
+    """Persistent Onboarding Sync: Saves stage progress for resuming sessions."""
+    conn = sqlite3.connect(GOVT_DB)  # Officers live in government.db
+    email = email.lower()
+    
+    # Check if user exists (partial record)
+    user = conn.execute("SELECT id FROM government_officers WHERE email = ?", (email,)).fetchone()
+    
+    if not user:
+        # Create initial record if it doesn't exist during Stage 1
+        # We assume Name is sent in field/value if it's the first creation
+        if field == "name":
+            conn.execute("INSERT INTO government_officers (email, name, onboarding_step) VALUES (?, ?, ?)", (email, value, step))
+        else:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Cannot initialize record without Name.")
+    else:
+        # Update existing record
+        query = f"UPDATE government_officers SET onboarding_step = ?"
+        params = [step]
+        if field and value:
+            query += f", {field} = ?"
+            params.append(value)
+        query += " WHERE email = ?"
+        params.append(email)
+        conn.execute(query, tuple(params))
+        
+    conn.commit()
+    conn.close()
+    return {"status": "success", "step": step}
+
+@app.get("/api/onboarding/check-code")
+async def check_workspace_code(code: str, location: str):
+    """Hierarchy Crack: Validates Admin-generated workspace security keys."""
+    # REVOLUTIONARY DEVELOPER: In this simplified logic, we check if an Admin exists for this location with this code
+    conn = sqlite3.connect(GOVT_DB)  # Officers live in government.db
+    admin = conn.execute(
+        "SELECT email FROM government_officers WHERE workspace_code = ? AND location = ? AND (admin_role = 'Admin' OR admin_role = 'Sarpanch' OR admin_role = 'Assistant Commissioner')", 
+        (code, location)
+    ).fetchone()
+    conn.close()
+    
+    if not admin:
+        raise HTTPException(status_code=403, detail="INVALID SECURITY CODE: The entered key does not match any Lead Administrator in this jurisdiction.")
+    
+    return {"status": "valid", "admin": admin[0]}
+
 @app.post("/register/government")
 async def register_government(
     name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
-    ward: str = Form(...),
+    location: str = Form(...), # Automated administrative resolution string
     uid: str = Form(...),
     password: str = Form(...),
+    admin_body: str = Form(...),
+    specific_role: str = Form(...),
+    workspace_code: Optional[str] = Form(None),
     admin_role: str = Form("Desk_Officer"), # Default to Desk_Officer
-    proof: UploadFile = File(...)
+    proof: Optional[UploadFile] = File(None)  # Optional — can be submitted later
 ):
-    """Revolutionary Developer: Secure Government Officer Registration"""
+    """Revolutionary Developer: Secure Government Officer Registration (Stage 9 Completion)"""
     email = email.strip().lower()
     if not auth_context.get(email, {}).get("verified"):
         raise HTTPException(status_code=403, detail="STRICT: Email verification required first.")
 
-    # Save Proof of Employment
-    os.makedirs("gov_proofs", exist_ok=True)
-    proof_path = f"gov_proofs/{email}_{proof.filename}"
-    content = await proof.read()
-    with open(proof_path, "wb") as f:
-        f.write(content)
+    # Save Proof of Employment (Optional — guard for None)
+    proof_path = None
+    if proof and proof.filename:
+        os.makedirs("gov_proofs", exist_ok=True)
+        proof_path = f"gov_proofs/{email}_{proof.filename}"
+        content = await proof.read()
+        with open(proof_path, "wb") as f:
+            f.write(content)
 
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(GOVT_DB)  # Officers live in government.db
     try:
-        # SYSTEMS ARCHITECT: First-User Elevation (Zero-Touch Admin Deployment)
+        # SYSTEMS ARCHITECT: Sovereign Identity Handshake (Lead Role Logic)
         officer_count = conn.execute("SELECT COUNT(*) FROM government_officers").fetchone()[0]
-        final_role = "Admin" if officer_count == 0 else admin_role
+        
+        # If it's a first-ever official or a Lead Role, assign Admin status
+        lead_roles = ['Sarpanch', 'Assistant Commissioner', 'Chief Officer']
+        final_admin_role = "Admin" if officer_count == 0 or specific_role in lead_roles else admin_role
 
+        # Update the existing partial record or insert new one
         conn.execute(
-            "INSERT INTO government_officers (name, email, phone, ward, uid_number, proof_path, password_hash, admin_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, email, phone, ward, uid, proof_path, hash_password(password), final_role)
+            """UPDATE government_officers SET 
+            name = ?, phone = ?, uid_number = ?, proof_path = ?, 
+            password_hash = ?, admin_role = ?, location = ?, 
+            admin_body = ?, specific_role = ?, workspace_code = ?, 
+            onboarding_step = 9, is_onboarded = 1 
+            WHERE email = ?""",
+            (name, phone, uid, proof_path, hash_password(password), final_admin_role, location, admin_body, specific_role, workspace_code, email)
         )
         conn.commit()
         
@@ -346,10 +468,11 @@ async def register_government(
         if email in auth_context:
             del auth_context[email]
             
-        send_email(email, "Welcome Officer", f"Hello {name}, your Nivaran Officer account is created! Role: {admin_role}")
+        send_email(email, "Welcome Officer", f"Hello {name}, your Nivaran Officer account is created! Role: {specific_role}")
         return {"status": "success", "redirect_to": "/dashboard", "is_setup_complete": 0}
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=400, detail="Officer already exists.")
+    except Exception as e:
+        print(f"Registration Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
 
@@ -559,27 +682,27 @@ async def get_user_profile(current_user: str = Depends(get_current_user)):
     """Administrative Identity Check: Returns profile details including setup status."""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT admin_role, ward FROM government_officers WHERE email = ?", (current_user,))
+    cursor.execute("SELECT admin_role, location FROM government_officers WHERE email = ?", (current_user,))
     user_data = cursor.fetchone()
     
     config_exists = cursor.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
     conn.close()
     
     admin_role = user_data[0] if user_data else "Desk_Officer"
-    ward = user_data[1] if user_data else "General"
+    location = user_data[1] if user_data else "General"
     is_setup_complete = 1  # DEPLOYMENT MODE: Standardized Production Standard
     
     return {
         "email": current_user,
         "admin_role": admin_role,
-        "ward": ward,
+        "ward": location,
         "is_setup_complete": is_setup_complete
     }
 
 @app.get("/api/v1/system/status")
 async def get_system_status():
     """Gatekeeper Logic: Dynamic status check via system_config table."""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(GOVT_DB)  # system_config lives in government.db
     cursor = conn.cursor()
     config_exists = cursor.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
     conn.close()
@@ -589,41 +712,62 @@ async def get_system_status():
 
 @app.post("/api/v1/system/configure")
 async def configure_system(
+    full_name: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(""),
+    uid: str = Form(""),
+    password: str = Form(""),
     scope: str = Form(...),
-    mapping: str = Form(...), # JSON string
-    sla: int = Form(...),
-    desk_officers: int = Form(5),
-    field_workers: int = Form(20),
-    admin: str = Depends(check_admin_authority)
+    desks: int = Form(5),
+    workers: int = Form(20),
+    sla: int = Form(24)
 ):
     """
     Top-Down Authority: Unified System Moulding.
-    Restricted to Administative Body Leads.
+    Restricted to Administrative Body Leads.
+    STEP A: Hash and persist officer PII.
+    STEP B: Anchor Admin identity to system_config.
     """
-    conn = sqlite3.connect(DATABASE_PATH)
+    email = email.strip().lower()
+
+    conn = sqlite3.connect(GOVT_DB)  # Officers & system_config live in government.db
     cursor = conn.cursor()
-    
+
     # Verify Administrative Role for this command (Strict RBAC)
-    cursor.execute("SELECT admin_role FROM government_officers WHERE email = ?", (admin,))
+    cursor.execute("SELECT admin_role FROM government_officers WHERE email = ?", (email,))
     role_record = cursor.fetchone()
-    if not role_record or role_record[0].lower() != 'admin':
+    if not role_record or role_record[0].lower() not in ('admin', 'desk_officer'):
         conn.close()
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="AUTHORITY DENIED: Only the System Admin can access the setup table."
         )
 
+    # STEP A: Hash password and persist officer PII from onboarding stages
+    new_hash = hash_password(password) if password else None
+    update_fields = ["phone = ?", "uid_number = ?", "is_setup_complete = 1"]
+    update_vals = [phone, uid]
+    if new_hash:
+        update_fields.append("password_hash = ?")
+        update_vals.append(new_hash)
+    update_vals.append(email)
+    cursor.execute(
+        f"UPDATE government_officers SET {', '.join(update_fields)} WHERE email = ?",
+        tuple(update_vals)
+    )
+
+    # STEP B: Anchor Admin identity and scope to system_config
     cursor.execute("DELETE FROM system_config")
     cursor.execute(
-        "INSERT INTO system_config (administrative_scope, category_mapping, sla_hours, desk_officers, field_workers) VALUES (?, ?, ?, ?, ?)",
-        (scope, mapping, sla, desk_officers, field_workers)
+        "INSERT INTO system_config (admin_email, admin_name, administrative_scope, sla_hours, desk_officers, field_workers) VALUES (?, ?, ?, ?, ?, ?)",
+        (email, full_name, scope, sla, desks, workers)
     )
     # Global sync: All admin personnel are now on the same operational page
     cursor.execute("UPDATE government_officers SET is_setup_complete = 1")
-    
+
     conn.commit()
     conn.close()
-    return {"status": "success", "message": "System Moulded: The Administrative Reality has been updated."}
+    return {"status": "success", "message": "System Moulded: The Administrative Reality has been updated.", "admin": email}
 
 @app.get("/api/v1/system/config")
 async def get_system_config(current_user: str = Depends(get_current_user)):
