@@ -15,7 +15,10 @@ app = FastAPI(title="Nivaran Backend - Verified Workflow")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -25,11 +28,12 @@ app.add_middleware(
 CITIZEN_DB = "citizens.db"
 GOVERNMENT_DB = "government.db"
 SMTP_EMAIL = "rajeedandge444@gmail.com" 
-SMTP_PASSWORD = "sicz mhst xtij uict"
+SMTP_PASSWORD = "zflc iugz xhwd tgwh"
 
 # In-memory store for OTPs (Use Redis for production)
 auth_context = {}
 
+# --- DB INIT ---
 # --- DB INIT ---
 def init_dbs():
     conn_c = sqlite3.connect(CITIZEN_DB)
@@ -44,7 +48,7 @@ def init_dbs():
     conn_c.close()
     
     conn_g = sqlite3.connect(GOVERNMENT_DB)
-    # Ensure 'location' and 'designation' exist in the schema
+    # FIX: Changed 'file' to 'TEXT' for proof_path
     conn_g.execute('''CREATE TABLE IF NOT EXISTS government_officers (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         name TEXT, 
@@ -58,6 +62,55 @@ def init_dbs():
         role TEXT DEFAULT 'government')''')
     conn_g.close()
 
+# --- REGISTER GOV ---
+@app.post("/register/government")
+@app.post("/register/government")
+async def register_gov(
+    name: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    location: str = Form(...),
+    designation: str = Form(...),
+    uid: str = Form(...),
+    password: str = Form(...),
+    proof: UploadFile = File(...)
+):
+    # Security Check
+    user_context = auth_context.get(email)
+    if not user_context or not user_context.get("verified"):
+        raise HTTPException(status_code=403, detail="Session expired or email not verified.")
+
+    # Save Document Proof
+    os.makedirs("gov_proofs", exist_ok=True)
+    file_extension = os.path.splitext(proof.filename)[1]
+    proof_path = f"gov_proofs/{email}_proof{file_extension}"
+    
+    with open(proof_path, "wb") as f:
+        f.write(await proof.read())
+
+    conn = sqlite3.connect(GOVERNMENT_DB)
+    try:
+        conn.execute(
+            """INSERT INTO government_officers 
+            (name, email, phone, location, designation, uid_number, proof_path, password_hash) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, email, phone, location, designation, uid, proof_path, hash_password(password))
+        )
+        conn.commit()
+        
+        # Confirmation Email
+        send_email(email, "Nivaran - Registration Success", 
+                   f"Hello {name},\n\nYour account as {designation} has been created.")
+        
+        if email in auth_context: del auth_context[email]
+        return {"status": "success", "redirect_to": "/govLanding"}
+    
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="Officer with this email already exists.")
+    finally:
+        conn.close()
+
+
 init_dbs()
 
 # --- HELPERS ---
@@ -65,19 +118,20 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def send_email(target, subject, body):
-    msg = MIMEText(body)
+    from email.mime.multipart import MIMEMultipart
+    msg = MIMEMultipart()
     msg['Subject'] = subject
     msg['From'] = SMTP_EMAIL
     msg['To'] = target
+    msg.attach(MIMEText(body, 'plain'))
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30)
         server.login(SMTP_EMAIL, SMTP_PASSWORD)
         server.send_message(msg)
         server.quit()
         return True
     except Exception as e:
-        print(f"Mail Error: {e}")
+        print(f"Nivaran Mail Engine Error: {e}")
         return False
 
 # --- MODELS ---
@@ -117,6 +171,7 @@ async def send_otp(data: OTPRequest):
             raise HTTPException(status_code=404, detail=f"No registered {role} found.")
 
     otp_code = str(random.randint(100000, 999999))
+    print(f"DEBUG: The OTP for {data.email} is: {otp_code}") # ADD THIS LINE
     auth_context[email] = {
         "code": otp_code,
         "expiry": datetime.now() + timedelta(minutes=5),
@@ -206,4 +261,4 @@ async def register_gov(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
