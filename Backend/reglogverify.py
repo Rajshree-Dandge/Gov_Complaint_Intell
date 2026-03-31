@@ -28,7 +28,7 @@ app.add_middleware(
 CITIZEN_DB = "citizens.db"
 GOVERNMENT_DB = "government.db"
 SMTP_EMAIL = "rajeedandge444@gmail.com" 
-SMTP_PASSWORD = "jpiy ukpb lgtu kcxt"
+SMTP_PASSWORD = "zflc iugz xhwd tgwh"
 
 # In-memory store for OTPs (Use Redis for production)
 auth_context = {}
@@ -261,4 +261,4 @@ async def register_gov(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

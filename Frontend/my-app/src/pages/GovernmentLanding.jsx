@@ -174,5 +174,3 @@ export default function GovernmentLanding() {
     </div>
   );
 }
-
-export default GovernmentLanding
