@@ -22,7 +22,7 @@ const ComplaintContext = createContext();
 
 export function ComplaintProvider({ children }) {
   const { user, isGovernment } = useAuth();
-  const { user, isGovernment } = useAuth();
+  // const { user, isGovernment } = useAuth();
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(false);
 
