@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,10 +14,7 @@ app = FastAPI(title="Nivaran Backend - Verified Workflow")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173"
-    ],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,10 +26,10 @@ GOVERNMENT_DB = "government.db"
 SMTP_EMAIL = "rajeedandge444@gmail.com" 
 SMTP_PASSWORD = "zflc iugz xhwd tgwh"
 
-# In-memory store for OTPs (Use Redis for production)
+# In-memory store for OTPs and Sessions
 auth_context = {}
+sessions = {} # {token: {"name": str, "role": str}}
 
-# --- DB INIT ---
 # --- DB INIT ---
 def init_dbs():
     conn_c = sqlite3.connect(CITIZEN_DB)
@@ -48,7 +44,6 @@ def init_dbs():
     conn_c.close()
     
     conn_g = sqlite3.connect(GOVERNMENT_DB)
-    # FIX: Changed 'file' to 'TEXT' for proof_path
     conn_g.execute('''CREATE TABLE IF NOT EXISTS government_officers (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         name TEXT, 
@@ -62,60 +57,16 @@ def init_dbs():
         role TEXT DEFAULT 'government')''')
     conn_g.close()
 
-# --- REGISTER GOV ---
-@app.post("/register/government")
-@app.post("/register/government")
-async def register_gov(
-    name: str = Form(...),
-    email: str = Form(...),
-    phone: str = Form(...),
-    location: str = Form(...),
-    designation: str = Form(...),
-    uid: str = Form(...),
-    password: str = Form(...),
-    proof: UploadFile = File(...)
-):
-    # Security Check
-    user_context = auth_context.get(email)
-    if not user_context or not user_context.get("verified"):
-        raise HTTPException(status_code=403, detail="Session expired or email not verified.")
-
-    # Save Document Proof
-    os.makedirs("gov_proofs", exist_ok=True)
-    file_extension = os.path.splitext(proof.filename)[1]
-    proof_path = f"gov_proofs/{email}_proof{file_extension}"
-    
-    with open(proof_path, "wb") as f:
-        f.write(await proof.read())
-
-    conn = sqlite3.connect(GOVERNMENT_DB)
-    try:
-        conn.execute(
-            """INSERT INTO government_officers 
-            (name, email, phone, location, designation, uid_number, proof_path, password_hash) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (name, email, phone, location, designation, uid, proof_path, hash_password(password))
-        )
-        conn.commit()
-        
-        # Confirmation Email
-        send_email(email, "Nivaran - Registration Success", 
-                   f"Hello {name},\n\nYour account as {designation} has been created.")
-        
-        if email in auth_context: del auth_context[email]
-        return {"status": "success", "redirect_to": "/govLanding"}
-    
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=400, detail="Officer with this email already exists.")
-    finally:
-        conn.close()
-
-
 init_dbs()
 
 # --- HELPERS ---
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
+
+def generate_session(email: str, name: str, role: str):
+    token = hashlib.sha256(f"{email}{datetime.now()}".encode()).hexdigest()
+    sessions[token] = {"name": name, "role": role}
+    return token
 
 def send_email(target, subject, body):
     from email.mime.multipart import MIMEMultipart
@@ -160,7 +111,6 @@ async def send_otp(data: OTPRequest):
     name = data.name.strip()
     role = data.role.strip()
 
-    # If it's a login check (not signup), verify user exists
     if not data.is_signup:
         db = GOVERNMENT_DB if role == "government" else CITIZEN_DB
         table = "government_officers" if role == "government" else "citizens"
@@ -171,12 +121,15 @@ async def send_otp(data: OTPRequest):
             raise HTTPException(status_code=404, detail=f"No registered {role} found.")
 
     otp_code = str(random.randint(100000, 999999))
-    print(f"DEBUG: The OTP for {data.email} is: {otp_code}") # ADD THIS LINE
+    print(f"DEBUG: OTP for {email}: {otp_code}")
+    
     auth_context[email] = {
         "code": otp_code,
         "expiry": datetime.now() + timedelta(minutes=5),
         "verified": False,
-        "role": role
+        "role": role,
+        "name": name,
+        "is_signup": data.is_signup
     }
     
     body = f"Hello {name},\n\nYour Nivaran verification code is: {otp_code}"
@@ -191,7 +144,14 @@ async def verify_otp(data: VerifyRequest):
         raise HTTPException(status_code=400, detail="Invalid or Expired OTP.")
     
     record["verified"] = True
-    return {"status": "success", "role": record["role"]}
+    
+    # SIGN-IN FLOW: If existing user, go straight to dashboard
+    if not record.get("is_signup"):
+        token = generate_session(data.email, record["name"], record["role"])
+        redirect_path = "/govLanding" if record["role"] == "government" else "/citizen"
+        return {"status": "success", "token": token, "redirect_to": redirect_path}
+
+    return {"status": "success", "message": "OTP verified. Please complete registration."}
 
 @app.post("/register/citizen")
 async def register_citizen(data: CitizenFinal):
@@ -203,30 +163,30 @@ async def register_citizen(data: CitizenFinal):
         conn.execute("INSERT INTO citizens (name, email, phone, uid_number, password_hash) VALUES (?, ?, ?, ?, ?)",
             (data.name, data.email, data.phone, data.uid_number, hash_password(data.password)))
         conn.commit()
+        
+        token = generate_session(data.email, data.name, "citizen")
         if data.email in auth_context: del auth_context[data.email]
-        return {"status": "success", "redirect_to": "/citizenLanding"}
+        
+        return {"status": "success", "token": token, "redirect_to": "/citizen"}
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="User already exists.")
     finally: conn.close()
 
-# --- UPDATED: GOVERNMENT REGISTRATION ---
 @app.post("/register/government")
 async def register_gov(
     name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
-    location: str = Form(...),      # Received from navigator.geolocation
-    designation: str = Form(...),   # Selected from rolesList
-    uid: str = Form(...),           # Maps to uid_number in DB
+    location: str = Form(...),
+    designation: str = Form(...),
+    uid: str = Form(...),
     password: str = Form(...),
     proof: UploadFile = File(...)
 ):
-    # Security Check: Ensure OTP was verified in Step 1
     user_context = auth_context.get(email)
     if not user_context or not user_context.get("verified"):
-        raise HTTPException(status_code=403, detail="Session expired or email not verified.")
+        raise HTTPException(status_code=403, detail="Email not verified.")
 
-    # Save Document Proof
     os.makedirs("gov_proofs", exist_ok=True)
     file_extension = os.path.splitext(proof.filename)[1]
     proof_path = f"gov_proofs/{email}_proof{file_extension}"
@@ -236,7 +196,6 @@ async def register_gov(
 
     conn = sqlite3.connect(GOVERNMENT_DB)
     try:
-        # Insert all fields including new location and designation
         conn.execute(
             """INSERT INTO government_officers 
             (name, email, phone, location, designation, uid_number, proof_path, password_hash) 
@@ -245,20 +204,23 @@ async def register_gov(
         )
         conn.commit()
         
-        # Send Confirmation Email
-        send_email(email, "Nivaran - Registration Success", 
-                   f"Hello {name},\n\nYour account as {designation} has been created successfully.")
+        token = generate_session(email, name, "government")
+        send_email(email, "Nivaran - Registration Success", f"Hello {name}, account created as {designation}.")
         
-        # Clear verification session
         if email in auth_context: del auth_context[email]
-        
-        return {"status": "success", "redirect_to": "/govLanding"}
+        return {"status": "success", "token": token, "redirect_to": "/govLanding"}
     
     except sqlite3.IntegrityError:
-        raise HTTPException(status_code=400, detail="Officer with this email already exists.")
+        raise HTTPException(status_code=400, detail="Officer already exists.")
     finally:
         conn.close()
 
+@app.get("/api/me")
+async def get_me(token: str):
+    if token not in sessions:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    return sessions[token]
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
