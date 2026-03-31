@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 
 export default function ProtectedRoute({ children, allowedRole }) {
  const { user, isAuthenticated, loading } = useAuth();
+export default function ProtectedRoute({ children, allowedRole }) {
+ const { user, isAuthenticated, loading } = useAuth();
 
   if (loading) return  (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontSize: '1.2rem' }}>
