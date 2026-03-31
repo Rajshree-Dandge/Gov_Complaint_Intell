@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar.jsx';
 import { TutorialOverlay } from './TutorialOverlay.jsx';
 import { useApp } from '../context/AppContext.jsx';
@@ -10,12 +10,12 @@ export function Layout() {
   const { showTutorial, setShowTutorial } = useApp();
 
   useEffect(() => {
-    // Only show tutorial on dashboard page
-    if (location.pathname === '/') {
+    // UPDATED: Check for /dashboard since that is where the main view sits
+    if (location.pathname === '/dashboard' || location.pathname === '/dashboard/') {
       const tutorialCompleted = localStorage.getItem('tutorialCompleted');
       if (!tutorialCompleted) {
-        // Small delay to ensure elements are rendered
-        setTimeout(() => setShowTutorial(true), 500);
+        const timer = setTimeout(() => setShowTutorial(true), 800);
+        return () => clearTimeout(timer);
       }
     } else {
       setShowTutorial(false);
@@ -23,12 +23,17 @@ export function Layout() {
   }, [location.pathname, setShowTutorial]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <main>
-        <Outlet />
+      <main className="flex-1">
+        <Outlet /> 
       </main>
-      {showTutorial && location.pathname === '/' && <TutorialOverlay />}
+      
+      {/* Tutorial only shows on the main dashboard path */}
+      {showTutorial && (location.pathname === '/dashboard' || location.pathname === '/dashboard/') && (
+        <TutorialOverlay />
+      )}
+      
       <Toaster richColors position="top-right" />
     </div>
   );

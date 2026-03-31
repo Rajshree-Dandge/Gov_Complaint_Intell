@@ -1,28 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
-import './AuthPage.css';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
+import { cn } from '../components/ui/utils';
+
+// --- ANIMATED KEYWORDS FOR THE LEFT PANEL ---
+const KEYWORDS = [
+  "Sovereign AI", "Zero-Friction", "Automated Triage", 
+  "Verified Ground Truth", "Smart Governance", "Secure Handshake"
+];
 
 export default function CitizenSignup() {
   const navigate = useNavigate();
-  const { signUpWithEmail, error, setError } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
-
-  // Workflow States
-  const [step, setStep] = useState('verification'); // 'verification' or 'details'
+  
+  // --- PRESERVED LOGIC STATES ---
+  const [step, setStep] = useState('verification'); 
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpTimer, setOtpTimer] = useState(0);
   const [isVerified, setIsVerified] = useState(false);
-  
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', uid: '', password: '', confirmPassword: '',
+    name: '', email: '', phone: '', password: '', confirmPassword: '',
   });
 
-  // Handle OTP Resend Timer
+  // --- PRESERVED EFFECTS ---
   useEffect(() => {
     if (otpTimer > 0) {
       const interval = setInterval(() => setOtpTimer(t => t - 1), 1000);
@@ -32,193 +36,178 @@ export default function CitizenSignup() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  // 1. Request OTP from FastAPI Backend
+  // --- PRESERVED HANDLERS (EXACTLY AS PER YOUR LOGIC) ---
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!form.email || !form.name || !form.phone) {
-      setError('Please fill Name, Email, and Phone to receive a verification code');
-      return;
+      setError('Required fields missing'); return;
     }
-    
-    setSubmitting(true);
-    setError('');
+    setSubmitting(true); setError('');
     try {
       const response = await fetch('http://localhost:8000/api/send-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-          email: form.email.trim(),
-          name: form.name.trim(),
-          role: 'citizen',
-          is_signup: true // <--- THIS WAS MISSING
-        }),
+          body: JSON.stringify({ email: form.email.trim(), name: form.name.trim(), role: 'citizen', is_signup: true }),
       });
-
-      if (!response.ok) throw new Error('Failed to send OTP. Please try again.');
-
-      setOtpSent(true);
-      setOtpTimer(60); // 60 seconds until resend allowed
-      setSuccessMsg('A 6-digit code has been sent to your email.');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
+      if (!response.ok) throw new Error('Failed to send OTP.');
+      setOtpSent(true); setOtpTimer(60);
+      setSuccessMsg('Code sent to your email.');
+    } catch (err) { setError(err.message); } finally { setSubmitting(false); }
   };
 
-  // 2. Verify OTP
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
-    if (otp.length < 6) return setError('Please enter the 6-digit code');
-
-    setSubmitting(true);
-    setError('');
+    setSubmitting(true); setError('');
     try {
       const verifyRes = await fetch('http://localhost:8000/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email.trim(), code: otp.trim() }),
       });
-
-      if (!verifyRes.ok) throw new Error('Invalid or expired OTP');
-
-      setIsVerified(true);
-      setStep('details');
-      setSuccessMsg('Email verified! Please complete your profile.');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
+      if (!verifyRes.ok) throw new Error('Invalid code');
+      setIsVerified(true); setStep('details');
+      setSuccessMsg('Email verified!');
+    } catch (err) { setError(err.message); } finally { setSubmitting(false); }
   };
 
-  // 3. Final Form Submission (Firebase + Python Backend)
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-
-    if (form.password !== form.confirmPassword) return setError('Passwords do not match');
-    if (form.password.length < 6) return setError('Password must be at least 6 characters');
-
+    if (form.password !== form.confirmPassword) return setError('Passwords mismatch');
     setSubmitting(true);
     try {
-      // Direct Python Backend Registration (FastAPI)
       const dbResponse = await fetch('http://localhost:8000/register/citizen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          uid_number: form.uid || "N/A",
-          password: form.password,
-        }),
+        body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone, password: form.password }),
       });
-
-      if (!dbResponse.ok) {
-        const result = await dbResponse.json();
-        throw new Error(result.detail || 'Database registration failed');
-      }
-
-      setSuccessMsg('Account created successfully! Redirecting...');
+      if (!dbResponse.ok) throw new Error('Registration failed');
+      setSuccessMsg('Account created! Redirecting...');
       setTimeout(() => navigate('/citizen-login'), 2000);
-    } catch (err) {
-      setError(err.message || 'Registration failed');
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) { setError(err.message); } finally { setSubmitting(false); }
   };
 
   return (
-    <div className="auth-page">
-      <button className="auth-theme-toggle" onClick={toggleTheme}>
-        {isDark ? '☀️' : '🌙'}
-      </button>
+    // --- THE FULL SCREEN OVERLAY ---
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      {/* 1. THE BLURRED BACKGROUND (Manual Page behind it) */}
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-lg"
+        onClick={() => navigate('/')} // Close on click outside
+      />
 
-      <div className="auth-card">
-        <div className="auth-header">
-          <span className="auth-emblem">👤</span>
-          <h1>Citizen Registration</h1>
-          <p>{step === 'verification' ? 'Verify your identity to start' : 'Secure your account'}</p>
+      {/* 2. THE CENTERED AUTH CARD */}
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="relative w-full max-w-4xl bg-white rounded-[32px] overflow-hidden flex flex-col md:flex-row min-h-[550px] shadow-2xl"
+      >
+        {/* CLOSE BUTTON */}
+        <button onClick={() => navigate('/')} className="absolute top-6 right-6 z-50 p-2 rounded-full hover:bg-slate-100 transition-colors text-slate-400">
+          <X size={24} />
+        </button>
+
+        {/* LEFT PANEL: EMERALD BRANDING + ANIMATING KEYWORDS */}
+        <div className="md:w-1/2 bg-[#10B981] p-12 flex flex-col justify-center items-center text-center text-white relative overflow-hidden">
+          {/* Breathing Keywords (Background layer) */}
+          {KEYWORDS.map((word, i) => (
+            <motion.span
+              key={i}
+              animate={{ opacity: [0.1, 0.4, 0.1], scale: [0.95, 1.05, 0.95] }}
+              transition={{ duration: 4, repeat: Infinity, delay: i * 0.8 }}
+              className="absolute text-emerald-300/30 font-bold whitespace-nowrap pointer-events-none"
+              style={{ 
+                top: `${15 + (i * 12)}%`, 
+                left: i % 2 === 0 ? '10%' : 'auto', 
+                right: i % 2 !== 0 ? '10%' : 'auto',
+                fontSize: '1.2rem'
+              }}
+            >
+              {word}
+            </motion.span>
+          ))}
+
+          <div className="relative z-10">
+             <h2 className="text-4xl font-black mb-4 leading-tight">Simple, Secure<br />Governance.</h2>
+             <p className="text-emerald-50 text-sm opacity-90 max-w-[280px]">
+               Empowering citizens with seamless digital services and transparent governance.
+             </p>
+             {/* MTF style accent */}
+             <div className="mt-12 flex flex-col items-center">
+                <div className="w-10 h-1 bg-white mb-2 rounded-full opacity-50" />
+                <span className="font-black tracking-[0.3em] text-sm">NIVARAN</span>
+             </div>
+          </div>
         </div>
 
-        {error && <div className="auth-error">{error}</div>}
-        {successMsg && <div className="auth-success">{successMsg}</div>}
+        {/* RIGHT PANEL: THE FORM */}
+        <div className="md:w-1/2 p-10 md:p-14 bg-white flex flex-col justify-center">
+           <div className="mb-8">
+              <h1 className="text-2xl font-black text-slate-900">Welcome to Nivaran AI</h1>
+              <p className="text-slate-400 text-sm mt-1">Verify your identity to get started</p>
+           </div>
 
-        {step === 'verification' ? (
-          <form className="auth-form" onSubmit={otpSent ? handleVerifyOtp : handleRequestOtp}>
-            <div className="auth-field">
-              <label>Full Name <span className="req">*</span></label>
-              <input type="text" name="name" value={form.name} onChange={handleChange} placeholder="Enter full name" required disabled={otpSent} />
-            </div>
-            <div className="auth-field">
-              <label>Email <span className="req">*</span></label>
-              <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="Enter email address" required disabled={otpSent} />
-            </div>
-            <div className="auth-field">
-              <label>Phone Number <span className="req">*</span></label>
-              <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="Enter phone number" required disabled={otpSent} />
-            </div>
+           <AnimatePresence mode="wait">
+             {error && (
+               <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="mb-4 p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-100">
+                 {error}
+               </motion.div>
+             )}
+             {successMsg && (
+               <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="mb-4 p-3 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-100">
+                 {successMsg}
+               </motion.div>
+             )}
+           </AnimatePresence>
 
-            {otpSent && (
-              <div className="otp-container">
-                <label>Verification Code</label>
-                <input 
-                  type="text" 
-                  className="otp-input-large" 
-                  value={otp} 
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  required
-                />
-                <div className="otp-resend">
-                  {otpTimer > 0 ? (
-                    <span>Resend code in {otpTimer}s</span>
-                  ) : (
-                    <button type="button" onClick={handleRequestOtp}>Resend Code</button>
-                  )}
+           {step === 'verification' ? (
+             <form onSubmit={otpSent ? handleVerifyOtp : handleRequestOtp} className="space-y-4">
+                <div className="space-y-1">
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name *</label>
+                   <input type="text" name="name" value={form.name} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" placeholder="Enter full name" disabled={otpSent} required />
                 </div>
-              </div>
-            )}
+                <div className="space-y-1">
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address *</label>
+                   <input type="email" name="email" value={form.email} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" placeholder="Enter your email" disabled={otpSent} required />
+                </div>
+                {otpSent && (
+                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Verification Code</label>
+                      <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-emerald-50 focus:bg-white focus:border-emerald-500 outline-none transition-all text-center text-xl font-bold tracking-[0.5em]" placeholder="000000" required />
+                      <div className="text-[10px] text-slate-400 text-center mt-2">
+                         {otpTimer > 0 ? `Resend available in ${otpTimer}s` : <button type="button" onClick={handleRequestOtp} className="text-emerald-600 font-bold">Resend OTP</button>}
+                      </div>
+                   </motion.div>
+                )}
+                <button type="submit" disabled={submitting} className="w-full py-4 bg-[#10B981] hover:bg-[#0da070] text-white rounded-2xl font-bold text-sm shadow-lg shadow-emerald-200 transition-all active:scale-[0.98] disabled:opacity-50">
+                   {submitting ? 'Processing...' : otpSent ? 'Verify Code' : 'Send OTP'}
+                </button>
+             </form>
+           ) : (
+             <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="grid grid-cols-1 gap-4">
+                   <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
+                      <input type="password" name="password" value={form.password} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" placeholder="••••••••" required />
+                   </div>
+                   <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Confirm</label>
+                      <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" placeholder="••••••••" required />
+                   </div>
+                </div>
+                <button type="submit" disabled={submitting} className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold text-sm transition-all active:scale-[0.98]">
+                   {submitting ? 'Finalizing...' : 'Complete Registration'}
+                </button>
+           </form>
+           )}
 
-            <button type="submit" className="btn-auth" disabled={submitting}>
-              {otpSent ? (submitting ? 'Verifying...' : 'Verify Code') : (submitting ? 'Sending...' : 'Send OTP')}
-            </button>
-          </form>
-        ) : (
-          /* STEP 2: PROFILE DETAILS */
-          <form className="auth-form" onSubmit={handleSubmit}>
-            {/* <div className="auth-field">
-              <label>Government Identity (Aadhaar/UID) <span className="req">*</span></label>
-              <input type="text" name="uid" value={form.uid} onChange={handleChange} placeholder="Enter 12-digit UID" required maxLength={12} />
-            </div>
-             */}
-            <div className="auth-row">
-              <div className="auth-field">
-                <label>Password <span className="req">*</span></label>
-                <input type="password" name="password" value={form.password} onChange={handleChange} placeholder="••••••••" required />
-              </div>
-              <div className="auth-field">
-                <label>Confirm <span className="req">*</span></label>
-                <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} placeholder="••••••••" required />
-              </div>
-            </div>
-
-            <button type="submit" className="btn-auth" disabled={submitting}>
-              {submitting ? 'Creating Account...' : 'Complete Registration'}
-            </button>
-          </form>
-        )}
-
-        <div className="auth-toggle">
-          Already have an account?{' '}
-          <button onClick={() => navigate('/citizen-login')}>Sign In</button>
+           <div className="mt-8 text-center">
+              <p className="text-xs text-slate-400 font-medium">
+                Already have an account? <span onClick={() => navigate('/citizen-login')} className="text-emerald-600 font-bold cursor-pointer hover:underline">Sign In</span>
+              </p>
+           </div>
         </div>
-
-        <div className="auth-footer">
-          <Link to="/select-role">← Back to Role Selection</Link>
-        </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,7 +9,7 @@ import './AdminOnboarding.css';
 
 export default function AdminOnboarding() {
   const navigate = useNavigate();
-  const { user, error, setError } = useAuth();
+  const { user, login, error, setError } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const fileRef = useRef(null);
 
@@ -45,7 +44,7 @@ export default function AdminOnboarding() {
       const email = form.email;
       if (!email) return;
       try {
-        const res = await axios.get(`http://localhost:8001/api/onboarding/status?email=${email}`);
+        const res = await axios.get(`http://localhost:8000/api/onboarding/status?email=${email}`);
         if (res.data.step > 1) {
           setForm(prev => ({
             ...prev,
@@ -74,7 +73,7 @@ export default function AdminOnboarding() {
         fd.append('field', field);
         fd.append('value', value);
       }
-      await axios.patch('http://localhost:8001/api/onboarding/update-step', fd);
+      await axios.patch('http://localhost:8000/api/onboarding/update-step', fd);
       toast.success(`Stage ${nextStep} Synchronized`, { style: { background: '#10B981', color: '#fff', border: 'none' } });
       setStep(nextStep);
     } catch (err) {
@@ -113,7 +112,7 @@ export default function AdminOnboarding() {
     }
     setIsValidatingCode(true);
     try {
-      await axios.get(`http://localhost:8001/api/onboarding/check-code?code=${form.workspaceCode}&location=${form.location}`);
+      await axios.get(`http://localhost:8000/api/onboarding/check-code?code=${form.workspaceCode}&location=${form.location}`);
       await syncStep(9, 'workspace_code', form.workspaceCode);
     } catch (err) { setError(err.response?.data?.detail || "Invalid Key."); }
     finally { setIsValidatingCode(false); }
@@ -138,10 +137,19 @@ export default function AdminOnboarding() {
       fd.append('workers', 20);
       fd.append('sla', 24);
 
-      await axios.post('http://localhost:8001/api/v1/system/configure', fd);
+      await axios.post('http://localhost:8000/api/v1/system/configure', fd);
+      
+      login({
+      ...user,
+      email: officerEmail,
+      name: officerName,
+      role: 'government',
+      is_setup_complete: 1 
+    });
+
       toast.success("✅ Sovereign Initialization Complete. Identity Anchored.");
       localStorage.removeItem('gov_signup_email');
-      setTimeout(() => navigate('/login'), 2000);
+      setTimeout(() => navigate('/dashboard'), 2000);
     } catch (err) {
       // CRASH FIX: Always coerce error to a string — never let a plain object reach React children
       const raw = err.response?.data?.detail;

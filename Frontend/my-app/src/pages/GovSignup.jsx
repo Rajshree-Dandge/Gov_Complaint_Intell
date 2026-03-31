@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,7 +34,7 @@ export default function GovSignup() {
   const checkResumption = async () => {
     if (!form.email.includes('@')) return;
     try {
-      const res = await axios.get(`http://localhost:8001/api/onboarding/status?email=${form.email.trim()}`);
+      const res = await axios.get(`http://localhost:8000/api/onboarding/status?email=${form.email.trim()}`);
       if (res.data.skip_otp) {
         toast.success(res.data.message, {
           style: { background: '#10B981', color: '#fff', border: 'none' }
@@ -53,7 +52,7 @@ export default function GovSignup() {
     setSubmitting(true);
     setError('');
     try {
-      await axios.post('http://localhost:8001/api/send-otp', {
+      await axios.post('http://localhost:8000/api/send-otp', {
         email: form.email.trim(), name: form.name.trim(), role: 'government', is_signup: true
       });
       
@@ -63,7 +62,7 @@ export default function GovSignup() {
       fd.append('step', 1);
       fd.append('field', 'name');
       fd.append('value', form.name.trim());
-      await axios.patch('http://localhost:8001/api/onboarding/update-step', fd);
+      await axios.patch('http://localhost:8000/api/onboarding/update-step', fd);
 
       setOtpSent(true);
       setOtpTimer(60);
@@ -90,7 +89,7 @@ export default function GovSignup() {
     setSubmitting(true);
     setError(''); 
     try {
-      await axios.post('http://localhost:8001/api/verify-otp', {
+      await axios.post('http://localhost:8000/api/verify-otp', {
         email: form.email.trim(), code: otp.trim() 
       });
       localStorage.setItem('gov_signup_email', form.email.trim());

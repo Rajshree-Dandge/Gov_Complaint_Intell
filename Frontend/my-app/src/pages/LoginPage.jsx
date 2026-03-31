@@ -67,64 +67,48 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
   };
 
   const handleVerifyAndLogin = async (e) => {
-    e.preventDefault();
-    if (otp.length < 6) return setError('Enter 6-digit code');
+  e.preventDefault();
+  setSubmitting(true);
+  try {
+    const verifyRes = await axios.post('http://localhost:8000/api/verify-otp', {
+      email: email.trim(),
+      code: otp.trim()
+    });
 
-    setSubmitting(true);
-    setError('');
-    try {
-      // SYSTEMS ARCHITECT: Sub-50ms Optimized Verification Handshake
-      const verifyRes = await axios.post('http://localhost:8000/api/verify-otp', {
-        email: email.trim(),
-        code: otp.trim()
-      }, { timeout: 30000 });
+    const result = verifyRes.data;
+    const finalRole = result.role.toLowerCase();
 
-      const result = verifyRes.data;
+    // 1. Update Global Auth State
+    login({
+      email: email.trim(),
+      name: name.trim(),
+      role: finalRole,
+      is_setup_complete: result.is_setup_complete
+    }, result.token);
 
-      const finalRole = result.role.trim().toLowerCase();
-      // Update Auth State using the new login function (userData, token)
-      // Update Auth State using the new login function (userData, token)
-      login({
-        email: email.trim(),
-        name: name.trim(),
-        role: finalRole,
-        admin_role: result.admin_role || "Desk_Officer",
-        ward: result.ward || "General",
-        onboarding_step: result.onboarding_step || 1,
-        is_setup_complete: result.is_setup_complete || 0
-      }, result.token);
-
-      setSuccessMsg('Login Successful!');
-
-      setTimeout(() => {
-        if (finalRole === 'government') {
-          // SOVEREIGN REDIRECTION: If setup is incomplete, target for moulding
-          if ((result.is_setup_complete || 0) === 0) {
-            if ((result.onboarding_step || 1) > 1) {
-              navigate('/admin-onboarding');
-            } else {
-              navigate('/gov-signup');
-            }
-          } else {
-            navigate('/gov-landing');
-          }
-        } else if (finalRole === 'citizen') {
-          navigate('/citizen');
-        } else {
-          setError('Unknown user role. Contact support.');
-        }
-      }, 1000);
-
-    } catch (err) {
-      if (err.code === 'ECONNABORTED') {
-        setError('Verification Timed Out. Please Retry.');
+    // 2. Navigation Logic based on your flow
+    if (finalRole === 'government') {
+      if (result.is_setup_complete === 1) {
+        // User exists in DB -> Go to Dashboard
+        navigate('/dashboard');
       } else {
-        setError(err.response?.data?.detail || err.message);
+        // User verified email but not registered -> Go to Details page
+        // If they already started details, go to onboarding, else signup
+        if (result.onboarding_step > 1) {
+          navigate('/admin-onboarding');
+        } else {
+          navigate('/gov-signup');
+        }
       }
-    } finally {
-      setSubmitting(false);
+    } else {
+      navigate('/citizen');
     }
-  };
+  } catch (err) {
+    setError(err.response?.data?.detail || "Verification failed");
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const icon = defaultRole === 'government' ? '🏛️' : '👤';
   const title = defaultRole === 'government' ? 'Government Login' : 'Citizen Login';

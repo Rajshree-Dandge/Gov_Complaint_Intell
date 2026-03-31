@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link } from "react-router-dom"; // Changed to react-router-dom
 import {
   Map,
   Users,
@@ -7,8 +7,9 @@ import {
   FileText,
   TrendingUp,
 } from "lucide-react";
-import { Card, CardContent } from "../components/ui/card.jsx";
+import { Card, CardContent } from "../components/ui2/card.jsx";
 import { mockStatistics } from "../data/mockData.js";
+import { useAuth } from "../context/AuthContext"; // Import your Auth hook
 
 const actionButtons = [
   {
@@ -16,7 +17,7 @@ const actionButtons = [
     title: "Visualization",
     description: "View complaints on interactive map",
     icon: Map,
-    path: "/visualization",
+    path: "/dashboard/visualization", // Updated path to match nested routes
     color: "bg-emerald-500 hover:bg-emerald-600",
   },
   {
@@ -24,7 +25,7 @@ const actionButtons = [
     title: "Desk Officers",
     description: "Manage officers and assignments",
     icon: Users,
-    path: "/officers",
+    path: "/dashboard/officers",
     color: "bg-teal-500 hover:bg-teal-600",
   },
   {
@@ -32,7 +33,7 @@ const actionButtons = [
     title: "Statistics",
     description: "View complaint analytics",
     icon: BarChart3,
-    path: "/statistics",
+    path: "/dashboard/statistics",
     color: "bg-green-500 hover:bg-green-600",
   },
   {
@@ -40,13 +41,19 @@ const actionButtons = [
     title: "Send Email",
     description: "Communicate with citizens",
     icon: Mail,
-    path: "/email",
+    path: "/dashboard/email",
     color: "bg-lime-600 hover:bg-lime-700",
   },
 ];
 
 export function Dashboard() {
+  const { user } = useAuth(); // Access the logged-in user data
   const stats = mockStatistics.daily;
+
+  // Capitalize role for better UI display (e.g., "government" -> "Government")
+  const displayRole = user?.role 
+    ? user.role.charAt(0).toUpperCase() + user.role.slice(1) 
+    : "Officer";
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-gradient-to-br from-green-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 p-8">
@@ -54,28 +61,25 @@ export function Dashboard() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Dashboard Overview
+            Welcome, {user?.name || "User"} ({displayRole})
           </h2>
           <p className="text-gray-600 dark:text-gray-300">
-            Manage citizen complaints and coordinate with your
-            team
+            Manage citizen complaints and coordinate with your team
           </p>
         </div>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-white dark:bg-gray-800 border-l-4 border-l-primary">
+          <Card className="bg-white dark:bg-gray-800 border-l-4 border-l-emerald-600">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">
-                    Total Today
-                  </p>
-                  <p className="text-2xl font-bold text-primary">
+                  <p className="text-sm text-muted-foreground">Total Today</p>
+                  <p className="text-2xl font-bold text-emerald-600">
                     {stats.total}
                   </p>
                 </div>
-                <FileText className="h-8 w-8 text-primary opacity-50" />
+                <FileText className="h-8 w-8 text-emerald-600 opacity-50" />
               </div>
             </CardContent>
           </Card>
@@ -84,9 +88,7 @@ export function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">
-                    Pending
-                  </p>
+                  <p className="text-sm text-muted-foreground">Pending</p>
                   <p className="text-2xl font-bold text-yellow-600">
                     {stats.pending}
                   </p>
@@ -100,9 +102,7 @@ export function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">
-                    Resolved
-                  </p>
+                  <p className="text-sm text-muted-foreground">Resolved</p>
                   <p className="text-2xl font-bold text-green-600">
                     {stats.resolved}
                   </p>
@@ -116,9 +116,7 @@ export function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">
-                    Rejected
-                  </p>
+                  <p className="text-sm text-muted-foreground">Rejected</p>
                   <p className="text-2xl font-bold text-red-600">
                     {stats.rejected}
                   </p>
@@ -139,7 +137,7 @@ export function Dashboard() {
                 to={button.path}
                 data-tutorial={button.id}
               >
-                <Card className="h-full hover:shadow-lg transition-all duration-300 cursor-pointer group border-2 hover:border-primary">
+                <Card className="h-full hover:shadow-lg transition-all duration-300 cursor-pointer group border-2 hover:border-emerald-600">
                   <CardContent className="p-6">
                     <div className="flex flex-col items-center text-center">
                       <div
@@ -161,20 +159,17 @@ export function Dashboard() {
           })}
         </div>
 
-        {/* Additional Info */}
-        <Card className="mt-8 bg-gradient-to-r from-green-600 to-emerald-600 text-white">
+        {/* Help Banner */}
+        <Card className="mt-8 bg-gradient-to-r from-emerald-600 to-green-600 text-white border-none">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-semibold mb-1">
-                  Need Help?
-                </h3>
-                <p className="text-green-100">
-                  Click on any card above to navigate to the
-                  respective section
+                <h3 className="text-xl font-semibold mb-1">System Support</h3>
+                <p className="text-green-50 opacity-90">
+                  Select a module to manage jurisdiction complaints or coordinate with desk officers.
                 </p>
               </div>
-              <FileText className="h-12 w-12 opacity-50" />
+              <FileText className="h-12 w-12 opacity-30" />
             </div>
           </CardContent>
         </Card>

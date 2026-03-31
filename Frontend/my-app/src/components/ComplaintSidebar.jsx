@@ -3,7 +3,7 @@ import { X, FileText, MapPin, Calendar, User, AlertCircle, Users } from 'lucide-
 import { Button } from './ui2/button';
 import { Badge } from './ui2/badge';
 import { useApp } from '../context/AppContext.jsx';
-import { Card, CardContent, CardHeader, CardTitle } from './ui2/card';
+import { Card, CardContent, CardHeader, CardTitle } from './ui2/card.jsx';
 import { Separator } from './ui2/separator';
 import { toast } from 'sonner';
 
