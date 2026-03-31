@@ -1,263 +1,314 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
-import {
-  Building2,
-  Users,
-  Files,
-  Zap,
-  CheckCircle2,
-  ArrowRight,
-  ChevronRight,
-  ShieldCheck,
-  Clock,
-  LayoutGrid,
-  Bot
-} from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import './AdminOnboarding.css';
 
-/**
- * REVOLUTIONARY DEVELOPER: ADAPTIVE GOVERNANCE PORTAL
- * The Initialization Wizard has been refactored for "Digital Sunlight" UI.
- * It provides a smooth, animated progressive handshake with the backend.
- */
-const AdminOnboarding = () => {
-  const { user, login } = useAuth();
+export default function AdminOnboarding() {
   const navigate = useNavigate();
+  const { user, error, setError } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const fileRef = useRef(null);
+
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    bodyType: '',
-    deskOfficers: '',
-    fieldWorkers: '',
-    legacyFlow: '',
+  const [submitting, setSubmitting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [proofFile, setProofFile] = useState(null);
+  const [resolvedName, setResolvedName] = useState("");
+  const [isValidatingCode, setIsValidatingCode] = useState(false);
+
+  const [form, setForm] = useState({
+    name: user?.name || '', 
+    email: user?.email || localStorage.getItem('gov_signup_email') || '', 
+    phone: '', uid: '', password: '', 
+    location: '', adminBody: '', specificRole: '', workspaceCode: '' 
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const stepsCount = 4;
-  const progressPercent = ((step - 1) / (stepsCount - 1)) * 100;
-
-  const handleNext = () => {
-    if (step < 4) setStep(step + 1);
+  const BODY_DATA = {
+    'Gram Panchayat': { roles: ['Sarpanch', 'Gram Sevak', 'Gram Rozgar Sahayak'], leads: ['Sarpanch'] },
+    'Municipal Corporation (BMC)': { roles: ['Assistant Commissioner', 'Junior Engineer', 'Zonal Agency'], leads: ['Assistant Commissioner'] },
+    'Municipality': { roles: ['Chief Officer', 'Sanitary Inspector', 'Dept Contractor'], leads: ['Chief Officer'] }
   };
 
-  const handleBack = () => {
-    if (step > 1) setStep(step - 1);
+  const isLeadRole = (role) => {
+    if (!form.adminBody) return false;
+    return BODY_DATA[form.adminBody].leads.includes(role);
+  };
+
+  // --- SOVEREIGN RESUMPTION PROTOCOL ---
+  useEffect(() => {
+    const fetchStatus = async () => {
+      const email = form.email;
+      if (!email) return;
+      try {
+        const res = await axios.get(`http://localhost:8000/api/onboarding/status?email=${email}`);
+        if (res.data.step > 1) {
+          setForm(prev => ({
+            ...prev,
+            adminBody: res.data.admin_body || '',
+            specificRole: res.data.specific_role || '',
+            location: res.data.location || '',
+            workspaceCode: res.data.workspace_code || ''
+          }));
+          if (res.data.location) setResolvedName(res.data.location);
+          setStep(res.data.step);
+          toast.success("Resuming your Nivaran setup from Stage " + res.data.step);
+        }
+      } catch (err) { console.error("Onboarding fetch failed", err); }
+    };
+    fetchStatus();
+  }, []);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const syncStep = async (nextStep, field = null, value = null) => {
+    try {
+      const fd = new FormData();
+      fd.append('email', form.email);
+      fd.append('step', nextStep);
+      if (field) {
+        fd.append('field', field);
+        fd.append('value', value);
+      }
+      await axios.patch('http://localhost:8000/api/onboarding/update-step', fd);
+      toast.success(`Stage ${nextStep} Synchronized`, { style: { background: '#10B981', color: '#fff', border: 'none' } });
+      setStep(nextStep);
+    } catch (err) {
+      console.error("Sync failed:", err);
+      setStep(nextStep);
+    }
+  };
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) return setError("Geolocation Unsupported.");
+    setSubmitting(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await axios.get(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const addr = res.data.address;
+          const areaName = addr.city_district || addr.suburb || addr.road || addr.village || "Sovereign Zone";
+          setResolvedName(areaName);
+          setForm(prev => ({ ...prev, location: areaName }));
+          await syncStep(5, 'location', areaName);
+        } catch (err) {
+          const coords = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+          setForm(prev => ({ ...prev, location: coords }));
+          await syncStep(5, 'location', coords);
+        } finally { setSubmitting(false); }
+      },
+      () => { setError("Satellite Lockdown Denied."); setSubmitting(false); }
+    );
+  };
+
+  const handleVerifyWorkspace = async () => {
+    if (isLeadRole(form.specificRole)) {
+      await syncStep(9, 'workspace_code', form.workspaceCode);
+      return;
+    }
+    setIsValidatingCode(true);
+    try {
+      await axios.get(`http://localhost:8000/api/onboarding/check-code?code=${form.workspaceCode}&location=${form.location}`);
+      await syncStep(9, 'workspace_code', form.workspaceCode);
+    } catch (err) { setError(err.response?.data?.detail || "Invalid Key."); }
+    finally { setIsValidatingCode(false); }
   };
 
   const handleActivate = async () => {
-    setIsSubmitting(true);
+    setSubmitting(true);
+    setError('');
     try {
-      const token = localStorage.getItem('token');
-      const params = new URLSearchParams();
-      params.append('scope', formData.bodyType);
-      params.append('mapping', JSON.stringify({
-        "desk_officers": formData.deskOfficers,
-        "field_workers": formData.fieldWorkers,
-        "legacy_context": formData.legacyFlow
-      }));
-      params.append('sla', '24'); // Default SLA
+      // FULL-STACK SYNC: Gather Auth identity + all 9 onboarding stage data
+      const officerEmail = form.email || user?.email || localStorage.getItem('gov_signup_email') || '';
+      const officerName = form.name || user?.name || '';
 
-      // THE INTERACTIVE HANDSHAKE: POST REQUEST WITH TOKEN
-      const response = await axios.post('http://127.0.0.1:8000/api/v1/system/configure', params, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
+      const fd = new FormData();
+      fd.append('full_name', officerName);
+      fd.append('email', officerEmail);
+      fd.append('phone', form.phone || '');
+      fd.append('uid', form.uid || '');
+      fd.append('password', form.password || '');
+      fd.append('scope', form.adminBody || 'General');
+      fd.append('desks', 5);
+      fd.append('workers', 20);
+      fd.append('sla', 24);
 
-      if (response.data.status === 'success') {
-        // REVOLUTIONARY DEVELOPER: PERSISTING CONFIGURATION STATE
-        const updatedUser = { ...user, is_setup_complete: 1 };
-        login(updatedUser, token);
-        navigate('/dashboard');
-      }
-    } catch (error) {
-      console.error("Configuration failed", error);
+      await axios.post('http://localhost:8000/api/v1/system/configure', fd);
+      toast.success("✅ Sovereign Initialization Complete. Identity Anchored.");
+      localStorage.removeItem('gov_signup_email');
+      setTimeout(() => navigate('/login'), 2000);
+    } catch (err) {
+      // CRASH FIX: Always coerce error to a string — never let a plain object reach React children
+      const raw = err.response?.data?.detail;
+      const msg = Array.isArray(raw)
+        ? raw[0]?.msg || JSON.stringify(raw[0])
+        : typeof raw === 'string'
+          ? raw
+          : err.message || "Setup Error — please retry.";
+      setError(String(msg));
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  const renderStage = () => {
-    switch (step) {
-      case 1:
-        return (
-          <div className="onboarding-stage bento-grid">
-            <div className="bento-item header-item">
-              <h2>Select Administrative Body</h2>
-              <p>Identify the jurisdiction scale Nivaran will manage.</p>
-            </div>
-            {['Gram Panchayat', 'Nagar Parishad', 'Municipal Corporation'].map((type) => (
-              <div
-                key={type}
-                className={`bento-item selectable-item ${formData.bodyType === type ? 'selected' : ''}`}
-                onClick={() => setFormData({ ...formData, bodyType: type })}
-              >
-                <div className="icon-wrapper">
-                  <Building2 size={24} />
-                </div>
-                <h3>{type}</h3>
-                <p>Configure for {type.toLowerCase()} operations.</p>
-                {formData.bodyType === type && <CheckCircle2 className="select-check" size={20} />}
-              </div>
-            ))}
-          </div>
-        );
-      case 2:
-        return (
-          <div className="onboarding-stage bento-grid">
-            <div className="bento-item header-item">
-              <h2>Define Workforce Hierarchy</h2>
-              <p>Allocate resources for automated task assignment.</p>
-            </div>
-            <div className="bento-item input-item span-2">
-              <label>Number of Desk 1 Officers</label>
-              <div className="input-with-icon">
-                <ShieldCheck size={20} color="#3B82F6" />
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 5"
-                  value={formData.deskOfficers}
-                  onChange={(e) => {
-                    const value = Math.max(0, parseInt(e.target.value) || 0);
-                    setFormData({ ...formData, deskOfficers: value.toString() });
-                  }}
-                />
-              </div>
-              <p className="input-hint">Officers responsible for backend verification.</p>
-            </div>
-            <div className="bento-item input-item span-2">
-              <label>Field Workers Available</label>
-              <div className="input-with-icon">
-                <Users size={20} color="#10B981" />
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 20"
-                  value={formData.fieldWorkers}
-                  onChange={(e) => {
-                    const value = Math.max(0, parseInt(e.target.value) || 0);
-                    setFormData({ ...formData, fieldWorkers: value.toString() });
-                  }}
-                />
-              </div>
-              <p className="input-hint">Personnel handling on-ground resolutions.</p>
-            </div>
-          </div>
-        );
-      case 3:
-        return (
-          <div className="onboarding-stage bento-grid">
-            <div className="bento-item header-item">
-              <h2>Legacy Workflow Mapping</h2>
-              <p>How are complaints handled today?</p>
-            </div>
-            {['Manual', 'Email', 'Excel/Sheet'].map((flow) => (
-              <div
-                key={flow}
-                className={`bento-item selectable-item ${formData.legacyFlow === flow ? 'selected' : ''}`}
-                onClick={() => setFormData({ ...formData, legacyFlow: flow })}
-              >
-                <div className="icon-wrapper">
-                  {flow === 'Manual' ? <Files size={24} /> : flow === 'Email' ? <Bot size={24} /> : <LayoutGrid size={24} />}
-                </div>
-                <h3>{flow} Path</h3>
-                <p>Digitalizing existing {flow.toLowerCase()} context.</p>
-                {formData.legacyFlow === flow && <CheckCircle2 className="select-check" size={20} />}
-              </div>
-            ))}
-          </div>
-        );
-      case 4:
-        return (
-          <div className="onboarding-stage comparison-stage">
-            <div className="header-item">
-              <h2>The Nivaran Transformation</h2>
-              <p>Witness the impact of AI-driven governance.</p>
-            </div>
-            <div className="comparison-grid">
-              <div className="comparison-card old">
-                <h3 className="card-title">Legacy System</h3>
-                <div className="metric-wrap">
-                  <div className="metric-val" style={{color: '#ef4444'}}><Clock size={32} /> 7 Days</div>
-                  <div className="metric-label">Avg. Resolution Time</div>
-                </div>
-                <ul>
-                  <li>Manual Verification</li>
-                  <li>In-person follow ups</li>
-                  <li>Paper-based updates</li>
-                </ul>
-              </div>
-              <div className="comparison-card new">
-                <h3 className="card-title">Nivaran AI Pipeline</h3>
-                <div className="metric-wrap">
-                  <div className="metric-val" style={{color: '#10b981'}}><Zap size={32} /> 2 Hours</div>
-                  <div className="metric-label">Avg. Resolution Time</div>
-                </div>
-                <ul>
-                  <li>YOLOv11 Object Detection</li>
-                  <li>DBSCAN Geospatial Triage</li>
-                  <li>Real-time Progress Proofs</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
+  const steps = [
+    { n: 1, title: 'Mobile Sync' },
+    { n: 2, title: 'Sovereign ID' },
+    { n: 3, title: 'Digital Signature' },
+    { n: 4, title: 'Satellite Lock' },
+    { n: 5, title: 'Resolution' },
+    { n: 6, title: 'Body Selection' },
+    { n: 7, title: 'Mandate' },
+    { n: 8, title: 'Workspace' },
+    { n: 9, title: 'Evidence' },
+    { n: 10, title: 'Finalize' }
+  ];
+
+  const slideVar = { initial: { opacity: 0, x: 20 }, animate: { opacity: 1, x: 0 }, exit: { opacity: 0, x: -20 } };
 
   return (
-    <div className="admin-onboarding-page">
-      <div className="onboarding-container">
-        {/* REVOLUTIONARY PROGRESS BAR: Animated Progress Handshake */}
-        <div className="progress-container">
-          <div 
-            className="progress-bar-fill" 
-            style={{ width: `${progressPercent}%` }}
-          >
-            <div className="progress-glow"></div>
-          </div>
+    <div className="auth-page digital-sunlight">
+      <button className="auth-theme-toggle" onClick={toggleTheme}>{isDark ? '☀️' : '🌙'}</button>
+      <div className="auth-card auth-card-wide">
+        <div className="auth-header">
+           <span className="auth-emblem">🏛️</span>
+           <h1>Administrative Setup</h1>
+           <div className="stepper-wrap">
+             {steps.map(s => <div key={s.n} className={`step-dot ${step >= s.n ? 'active' : ''}`} />)}
+           </div>
+           <p className="step-label">Stage {step}: {steps[step-1]?.title}</p>
         </div>
 
-        {/* Content Area */}
-        <div className="content-area">
-          {renderStage()}
+        {error && <div className="auth-error">{error}</div>}
+
+        <div className="stage-content" style={{ minHeight: '320px' }}>
+          <AnimatePresence mode="wait">
+            {step === 1 && (
+              <motion.div key={1} {...slideVar}>
+                 <div className="auth-field"><label>Mobile Synchronization</label>
+                 <input type="text" name="phone" value={form.phone} onChange={handleChange} placeholder="+91 XXXXX XXXXX" /></div>
+                 <button onClick={() => syncStep(2, 'phone', form.phone)} className="btn-auth">SYNCHRONIZE MOBILE</button>
+              </motion.div>
+            )}
+
+            {step === 2 && (
+              <motion.div key={2} {...slideVar}>
+                <div className="auth-field"><label>Sovereign Identity (12-digit UID)</label>
+                <input type="text" name="uid" value={form.uid} onChange={handleChange} placeholder="0000 0000 0000" /></div>
+                <button onClick={() => syncStep(3, 'uid_number', form.uid)} className="btn-auth">VERIFY ID</button>
+              </motion.div>
+            )}
+
+            {step === 3 && (
+              <motion.div key={3} {...slideVar}>
+                <div className="auth-field"><label>Establish Digital Signature (Password)</label>
+                <input type="password" name="password" value={form.password} onChange={handleChange} placeholder="••••••••" /></div>
+                <button onClick={() => syncStep(4, 'password_hash', form.password)} className="btn-auth">LOCK SIGNATURE</button>
+              </motion.div>
+            )}
+
+            {step === 4 && (
+              <motion.div key={4} {...slideVar} className="text-center">
+                 <span className="big-icon">🛰️</span>
+                 <h3>Satellite Lockdown</h3>
+                 <p>Lock your physical office coordinates to your identity.</p>
+                 <button onClick={handleGetLocation} className="btn-auth bg-emerald" disabled={submitting}>
+                   {submitting ? 'Locking...' : 'ACTIVATE POSITION LOCK'}
+                 </button>
+              </motion.div>
+            )}
+
+            {step === 5 && (
+              <motion.div key={5} {...slideVar}>
+                <div className="pulsing-badge-sovereign">📍 Verified Area: {resolvedName}</div>
+                <div className="auth-field" style={{marginTop: '20px'}}>
+                  <label>Service Jurisdiction</label>
+                  <input type="text" value={form.location} readOnly className="input-locked" />
+                </div>
+                <button onClick={() => syncStep(6)} className="btn-auth">CONFIRM JURISDICTION</button>
+              </motion.div>
+            )}
+
+            {step === 6 && (
+              <motion.div key={6} {...slideVar}>
+                <label className="field-label">Administrative Body</label>
+                <div className="gov-post-grid">
+                  {Object.keys(BODY_DATA).map(b => (
+                    <button key={b} className={`post-btn ${form.adminBody === b ? 'active' : ''}`}
+                      onClick={() => { setForm({...form, adminBody: b, specificRole: ''}); syncStep(7, 'admin_body', b); }}>{b}</button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {step === 7 && (
+              <motion.div key={7} {...slideVar}>
+                <label className="field-label">Official Mandate (Role)</label>
+                <div className="gov-post-grid">
+                  {BODY_DATA[form.adminBody].roles.map(r => (
+                    <button key={r} className={`post-btn ${form.specificRole === r ? 'active' : ''}`}
+                      onClick={() => { setForm({...form, specificRole: r}); syncStep(8, 'specific_role', r); }}>{r}</button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {step === 8 && (
+              <motion.div key={8} {...slideVar}>
+                 <h3>Workspace Handshake</h3>
+                 <p className="text-muted">{isLeadRole(form.specificRole) ? "Create a Security Key for your staff." : "Enter Key from your Admin."}</p>
+                 <input type="text" name="workspaceCode" value={form.workspaceCode} onChange={handleChange} 
+                        placeholder="SECURITY KEY" className="text-center" style={{letterSpacing: '4px', fontWeight: 900}} />
+                 <button onClick={handleVerifyWorkspace} className="btn-auth" disabled={isValidatingCode}>
+                   {isValidatingCode ? 'Validating...' : 'SYNC WORKSPACE'}
+                 </button>
+              </motion.div>
+            )}
+
+            {step === 9 && (
+              <motion.div key={9} {...slideVar}>
+                <label>Appointment Documentary Proof <span style={{color: '#6B7280', fontWeight: 400, fontSize: '0.8rem'}}>(Optional — can be submitted later)</span></label>
+                <div 
+                  className="upload-box-sovereign" 
+                  onClick={() => fileRef.current.click()}
+                  style={{ cursor: 'pointer', borderStyle: proofFile ? 'solid' : 'dashed' }}
+                >
+                  {proofFile 
+                    ? <span style={{color: '#10B981', fontWeight: 600}}>✅ {proofFile.name}</span>
+                    : <span>📄 Click here to Select Document (PDF/JPG)</span>
+                  }
+                  <input type="file" ref={fileRef} hidden onChange={(e) => setProofFile(e.target.files[0])} />
+                </div>
+                <button onClick={() => syncStep(10)} className="btn-auth">PROCEED TO FINALIZE</button>
+              </motion.div>
+            )}
+
+            {step === 10 && (
+              <motion.div key={10} {...slideVar}>
+                <h3>Identity Finalization</h3>
+                <p style={{color: '#6B7280', marginBottom: '1.5rem'}}>All stages complete. Activate your Sovereign account.</p>
+                <button 
+                  onClick={handleActivate} 
+                  className="btn-auth" 
+                  disabled={submitting}
+                  style={submitting ? { background: '#6EE7B7', animation: 'pulse 1.5s infinite' } : {}}
+                >
+                  {submitting ? '⚓ Anchoring Administrative Data...' : 'INITIALIZE SOVEREIGN ACCOUNT'}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Navigation Actions */}
-        <div className="onboarding-footer">
-          <div className="left-actions">
-            {step > 1 && (
-              <button className="btn-secondary" onClick={handleBack}>
-                Previous Step
-              </button>
-            )}
-          </div>
-
-          <div className="right-actions">
-            {step < 4 ? (
-              <button
-                className="btn-primary"
-                onClick={handleNext}
-                disabled={(step === 1 && !formData.bodyType) || (step === 2 && (!formData.deskOfficers || !formData.fieldWorkers)) || (step === 3 && !formData.legacyFlow)}
-              >
-                Continue <ChevronRight size={18} />
-              </button>
-            ) : (
-              <button className="btn-activate" onClick={handleActivate} disabled={isSubmitting}>
-                {isSubmitting ? 'Synergizing AI...' : 'Activate Automation'} <Zap size={18} fill="currentColor" />
-              </button>
-            )}
-          </div>
+        <div className="auth-footer">
+           <Link to="/gov-signup">← Review Core Identity</Link>
         </div>
       </div>
     </div>
   );
-};
-
-export default AdminOnboarding;
+}

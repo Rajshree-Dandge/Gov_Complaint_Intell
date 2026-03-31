@@ -28,7 +28,7 @@ app.add_middleware(
 CITIZEN_DB = "citizens.db"
 GOVERNMENT_DB = "government.db"
 SMTP_EMAIL = "rajeedandge444@gmail.com" 
-SMTP_PASSWORD = "zflc iugz xhwd tgwh"
+SMTP_PASSWORD = "jpiy ukpb lgtu kcxt"
 
 # In-memory store for OTPs (Use Redis for production)
 auth_context = {}

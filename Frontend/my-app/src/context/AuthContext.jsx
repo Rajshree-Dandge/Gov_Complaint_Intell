@@ -18,10 +18,14 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState('');
   
   // Added: Manually set a user from the Python Backend response
-  const setLocalUser = (userData) => {
+  const setLocalUser = (userData, token = null) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    if (token) localStorage.setItem('auth_token', token);
   };
+
+  // Alias: 'login' is the same as setLocalUser — called from LoginPage after OTP verify
+  const login = setLocalUser;
 
   useEffect(() => {
     // 1. Check for a locally saved session first (for page refreshes)
@@ -81,7 +85,8 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
-    setLocalUser, 
+    setLocalUser,
+    login,       // Alias exposed for LoginPage.jsx
     loading,
     error,
     setError,

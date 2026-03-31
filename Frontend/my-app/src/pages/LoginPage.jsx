@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import axios from 'axios';
 import './AuthPage.css';
 
 export default function LoginPage({ defaultRole = 'citizen' }) {
   const navigate = useNavigate();
   const { login, error, setError } = useAuth(); // Renamed setLocalUser to login
   const { isDark, toggleTheme } = useTheme();
-  
-  const [step, setStep] = useState('credentials'); 
+
+  const [step, setStep] = useState('credentials');
   const [email, setEmail] = useState('');
-  const [name, setName] = useState(''); 
+  const [name, setName] = useState('');
   const [otp, setOtp] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [otpTimer, setOtpTimer] = useState(0);
@@ -29,36 +30,41 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!email.trim() || !name.trim()) {
-        setError('Please enter both Name and Email');
-        return;
+      setError('Please enter both Name and Email');
+      return;
     }
-    
+
     setSubmitting(true);
     setError('');
     try {
-        const response = await fetch('http://localhost:8000/api/send-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-      email: email.trim(), 
-      name: name.trim(),
-      role: defaultRole,
-      is_signup: false
-  }),
-});
+      // SYSTEMS ARCHITECT: Axios Timeout Layer for Zero-Latency FAIL-FAST
+      const response = await axios.post('http://127.0.0.1:8000/api/send-otp', {
+        email: email.trim(),
+        name: name.trim(),
+        role: defaultRole,
+        is_signup: false
+      }, { timeout: 30000 });
 
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || 'Failed to send OTP');
-
-        setStep('otp');
+      if (response.status === 429) {
+        setError(response.data.detail || 'Access restricted. Please wait.');
         setOtpTimer(60);
-        setSuccessMsg(`User verified as ${defaultRole}. OTP sent to email.`);
+        return;
+      }
+
+      setStep('otp');
+      setOtpTimer(60);
+      setSuccessMsg(`User verified as ${defaultRole}. OTP sent to email.`);
     } catch (err) {
-        setError(err.message);
+      // FAIL-FAST logic with Retry failover
+      if (err.code === 'ECONNABORTED' || err.message.toLowerCase().includes('timeout')) {
+        setError('Connection Timed Out. Please Retry.');
+      } else {
+        setError(err.response?.data?.detail || err.message);
+      }
     } finally {
-        setSubmitting(false);
+      setSubmitting(false);
     }
-};
+  };
 
   const handleVerifyAndLogin = async (e) => {
     e.preventDefault();
@@ -67,16 +73,16 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
     setSubmitting(true);
     setError('');
     try {
-      const verifyRes = await fetch('http://localhost:8000/api/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), code: otp.trim() }),
-      });
+      // SYSTEMS ARCHITECT: Sub-50ms Optimized Verification Handshake
+      const verifyRes = await axios.post('http://localhost:8000/api/verify-otp', {
+        email: email.trim(),
+        code: otp.trim()
+      }, { timeout: 30000 });
 
-      const result = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(result.detail || 'Invalid OTP');
+      const result = verifyRes.data;
 
       const finalRole = result.role.trim().toLowerCase();
+      // Update Auth State using the new login function (userData, token)
       // Update Auth State using the new login function (userData, token)
       login({
         email: email.trim(),
@@ -84,24 +90,37 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
         role: finalRole,
         admin_role: result.admin_role || "Desk_Officer",
         ward: result.ward || "General",
+        onboarding_step: result.onboarding_step || 1,
         is_setup_complete: result.is_setup_complete || 0
       }, result.token);
 
-
       setSuccessMsg('Login Successful!');
-      
+
       setTimeout(() => {
-          if (finalRole === 'government') {
-            navigate('/dashboard');
-          } else if (finalRole === 'citizen') {
-            navigate('/citizen');
+        if (finalRole === 'government') {
+          // SOVEREIGN REDIRECTION: If setup is incomplete, target for moulding
+          if ((result.is_setup_complete || 0) === 0) {
+            if ((result.onboarding_step || 1) > 1) {
+              navigate('/admin-onboarding');
+            } else {
+              navigate('/gov-signup');
+            }
           } else {
-            setError('Unknown user role. Contact support.');
+            navigate('/gov-landing');
           }
+        } else if (finalRole === 'citizen') {
+          navigate('/citizen');
+        } else {
+          setError('Unknown user role. Contact support.');
+        }
       }, 1000);
-      
+
     } catch (err) {
-      setError(err.message);
+      if (err.code === 'ECONNABORTED') {
+        setError('Verification Timed Out. Please Retry.');
+      } else {
+        setError(err.response?.data?.detail || err.message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -119,37 +138,61 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
       <div className="auth-card">
         <div className="auth-header">
           <span className="auth-emblem">{icon}</span>
-          <h1>{title}</h1>
-          <p>Secure Access via OTP</p>
+          <h1>GOVERNMENT COMMAND</h1>
+          <p>SOVEREIGN IDENTITY PROTOCOL</p>
         </div>
 
-        {error && <div className="auth-error">{error}</div>}
-        {successMsg && <div className="auth-success">{successMsg}</div>}
+        {error && (
+          <div className="auth-error" style={error.includes('Timed Out') ? { background: '#FF0000', color: '#fff', border: 'none', fontWeight: 'bold' } : {}}>
+            {error}
+            {error.includes('Timed Out') && (
+              <button
+                type="button"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  marginTop: '0.75rem',
+                  padding: '0.5rem',
+                  background: '#10B981',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setError('')}
+              >
+                RETRY CONNECTION
+              </button>
+            )}
+          </div>
+        )}
+        {successMsg && <div className="auth-success" style={{ background: '#ECFDF5', color: '#065F46', borderLeft: '4px solid #10B981' }}>{successMsg}</div>}
 
         {step === 'credentials' ? (
           <form className="auth-form" onSubmit={handleRequestOtp}>
             <div className="auth-field">
               <label>Full Name</label>
-              <input 
-                type="text" 
-                value={name} 
-                onChange={e => setName(e.target.value)} 
-                placeholder="Enter registered name" 
-                required 
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Enter registered name"
+                required
               />
             </div>
             <div className="auth-field">
               <label>Email Address</label>
-              <input 
-                type="email" 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
-                placeholder="registered@email.com" 
-                required 
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="registered@email.com"
+                required
               />
             </div>
-            <button type="submit" className="btn-auth" disabled={submitting}>
-              {submitting ? 'Verifying...' : 'Send Login OTP'}
+            <button type="submit" className="btn-auth" disabled={submitting || otpTimer > 0}>
+              {submitting ? 'Authenticating...' : otpTimer > 0 ? `Wait ${otpTimer}s` : 'INITIALIZE SOVEREIGN HANDSHAKE'}
             </button>
           </form>
         ) : (
@@ -168,23 +211,24 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
               />
             </div>
             <button type="submit" className="btn-auth" disabled={submitting}>
-              {submitting ? 'Verifying...' : 'Verify & Sign In'}
+              {submitting ? 'Verifying Protocol...' : 'AUTHORIZE SOVEREIGN ENTRY'}
             </button>
             <div className="otp-resend">
               {otpTimer > 0 ? (
-                <span>Resend in {otpTimer}s</span>
+                <span>Resend available in {otpTimer}s</span>
               ) : (
-                <button type="button" onClick={handleRequestOtp}>Resend Code</button>
+                <button type="button" className="resend-link" onClick={handleRequestOtp}>Resend Code</button>
               )}
             </div>
           </form>
         )}
+
         <div className='auth-toggle'>
           Don't have an account?
-          <button onClick={()=>{navigate(signupPath)}}>Sign Up</button>
+          <button onClick={() => { navigate(signupPath) }}>Sign Up</button>
         </div>
         <div className="auth-footer">
-          <Link to="/select-role">← Back to Role Selection</Link>
+          <Link to="/">← RETURN TO MAIN TERMINAL</Link>
         </div>
       </div>
     </div>

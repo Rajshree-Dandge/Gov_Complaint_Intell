@@ -1,16 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { 
-  getFirestore, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  getDocs,
   getDoc,
-  addDoc, 
-  updateDoc, 
-  doc, 
-  orderBy, 
-  serverTimestamp 
+  addDoc,
+  updateDoc,
+  doc,
+  orderBy,
+  serverTimestamp
 } from 'firebase/firestore';
 
 // Remove any old imports from '../integrations/firebase/config'
@@ -28,44 +28,44 @@ export function ComplaintProvider({ children }) {
 
   // 1. Fetch Complaints (Related to current user)
   const fetchComplaints = useCallback(async () => {
-  // GUARD: If user is not logged in yet, stop here.
-  if (!user || !user.id) {
-    console.log("Waiting for user ID...");
-    return; 
-  }
-
-  setLoading(true);
-  try {
-    const complaintsRef = collection(db, "complaints");
-    let q;
-
-    if (isGovernment) {
-      q = query(complaintsRef, orderBy("created_at", "desc"));
-    } else {
-      // Now user.id is guaranteed to be a string, not undefined
-      q = query(
-        complaintsRef, 
-        where("user_id", "==", user.id), 
-        orderBy("created_at", "desc")
-      );
+    // GUARD: If user is not logged in yet, stop here.
+    if (!user || !user.id) {
+      console.log("Waiting for user ID...");
+      return;
     }
 
-    const querySnapshot = await getDocs(q);
-    const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    setComplaints(fetched);
-  } catch (error) {
-    console.error("Error fetching complaints:", error);
-  } finally {
-    setLoading(false);
-  }
-}, [user, isGovernment]);
+    setLoading(true);
+    try {
+      const complaintsRef = collection(db, "complaints");
+      let q;
+
+      if (isGovernment) {
+        q = query(complaintsRef, orderBy("created_at", "desc"));
+      } else {
+        // Now user.id is guaranteed to be a string, not undefined
+        q = query(
+          complaintsRef,
+          where("user_id", "==", user.id),
+          orderBy("created_at", "desc")
+        );
+      }
+
+      const querySnapshot = await getDocs(q);
+      const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setComplaints(fetched);
+    } catch (error) {
+      console.error("Error fetching complaints:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, isGovernment]);
 
   useEffect(() => {
-  // Only fetch if we actually have a valid user ID
-  if (user?.id) {
-    fetchComplaints();
-  }
-}, [user?.id, fetchComplaints]); // Dependency on user.id specifically
+    // Only fetch if we actually have a valid user ID
+    if (user?.id) {
+      fetchComplaints();
+    }
+  }, [user?.id, fetchComplaints]); // Dependency on user.id specifically
 
   // 2. Add Complaint (Storing the User's UID for the link)
   const addComplaint = async (complaintData) => {
@@ -105,7 +105,7 @@ export function ComplaintProvider({ children }) {
     try {
       const complaintRef = doc(db, "complaints", complaintDocId);
       const complaintSnap = await getDoc(complaintRef);
-      
+
       if (!complaintSnap.exists()) return;
       const complaintData = complaintSnap.data();
 
@@ -126,7 +126,7 @@ export function ComplaintProvider({ children }) {
       if (userSnap.exists()) {
         const userData = userSnap.data();
         console.log(`Ready to notify ${userData.name} at ${userData.email}`);
-        
+
         // TRIGGER NOTIFICATION: Call your FastAPI endpoint here
         // await fetch('http://localhost:8000/send-notification', {
         //   method: 'POST',
