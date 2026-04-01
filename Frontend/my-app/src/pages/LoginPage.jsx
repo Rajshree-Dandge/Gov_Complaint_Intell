@@ -4,8 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import axios from 'axios';
 import './AuthPage.css';
+import { toast } from 'sonner';
 
-export default function LoginPage({ defaultRole = 'citizen' }) {
+export default function LoginPage({ defaultRole }) {
   const navigate = useNavigate();
   const { login, error, setError } = useAuth(); // Renamed setLocalUser to login
   const { isDark, toggleTheme } = useTheme();
@@ -38,7 +39,7 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
     setError('');
     try {
       // SYSTEMS ARCHITECT: Axios Timeout Layer for Zero-Latency FAIL-FAST
-      const response = await axios.post('http://127.0.0.1:8000/api/send-otp', {
+      const response = await axios.post('http://localhost:8000/api/send-otp', {
         email: email.trim(),
         name: name.trim(),
         role: defaultRole,
@@ -70,41 +71,26 @@ export default function LoginPage({ defaultRole = 'citizen' }) {
   e.preventDefault();
   setSubmitting(true);
   try {
-    const verifyRes = await axios.post('http://localhost:8000/api/verify-otp', {
-      email: email.trim(),
-      code: otp.trim()
+    const res = await axios.post('http://localhost:8000/api/verify-otp', {
+      email,
+      code: otp,
     });
 
-    const result = verifyRes.data;
-    const finalRole = result.role.toLowerCase();
+    console.log("Server Response:", res.data);
 
-    // 1. Update Global Auth State
-    login({
-      email: email.trim(),
-      name: name.trim(),
-      role: finalRole,
-      is_setup_complete: result.is_setup_complete
-    }, result.token);
-
-    // 2. Navigation Logic based on your flow
-    if (finalRole === 'government') {
-      if (result.is_setup_complete === 1) {
-        // User exists in DB -> Go to Dashboard
-        navigate('/dashboard');
-      } else {
-        // User verified email but not registered -> Go to Details page
-        // If they already started details, go to onboarding, else signup
-        if (result.onboarding_step > 1) {
-          navigate('/admin-onboarding');
-        } else {
-          navigate('/gov-signup');
-        }
-      }
-    } else {
-      navigate('/citizen');
+    if (res.data.status === 'success') {
+      // login() comes from AuthContext to set local state/localStorage
+      login(res.data.user); 
+      console.log("Login Success:", res.data.user);
+      toast.success("Identity Verified");
+      navigate(res.data.redirect_to); // Redirects to /dashboard or /citizen-complaint
     }
   } catch (err) {
-    setError(err.response?.data?.detail || "Verification failed");
+    console.error("FULL ERROR OBJECT:", err);
+    console.error("SERVER ERROR DETAIL:", err.response?.data?.detail);
+    const errorMsg = err.response?.data?.detail || "Verification failed. Check console.";
+    setError(errorMsg);
+    // toast.error(errorMsg);
   } finally {
     setSubmitting(false);
   }

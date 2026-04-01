@@ -68,6 +68,8 @@ export default function GovSignup() {
       setOtpTimer(60);
       setSuccessMsg('Digital Handshake Dispatched.');
     } catch (err) {
+      console.warn("Onboarding sync failed, but proceeding with OTP", err);
+
       const detail = err.response?.data?.detail || "Handshake failed.";
       
       // SOVEREIGN RESUMPTION: If email is already registered, redirect to login

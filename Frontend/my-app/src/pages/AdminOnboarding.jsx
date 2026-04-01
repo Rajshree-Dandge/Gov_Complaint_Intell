@@ -45,7 +45,7 @@ export default function AdminOnboarding() {
       if (!email) return;
       try {
         const res = await axios.get(`http://localhost:8000/api/onboarding/status?email=${email}`);
-        if (res.data.step > 1) {
+        if (res.data && res.data.step > 1) {
           setForm(prev => ({
             ...prev,
             adminBody: res.data.admin_body || '',
@@ -119,50 +119,37 @@ export default function AdminOnboarding() {
   };
 
   const handleActivate = async () => {
-    setSubmitting(true);
-    setError('');
-    try {
-      // FULL-STACK SYNC: Gather Auth identity + all 9 onboarding stage data
-      const officerEmail = form.email || user?.email || localStorage.getItem('gov_signup_email') || '';
-      const officerName = form.name || user?.name || '';
+  setSubmitting(true);
+  try {
+    const fd = new FormData();
+    fd.append('email', form.email);
+    fd.append('name', form.name);
+    fd.append('phone', form.phone);
+    fd.append('location', form.location);
+    fd.append('uid_number', form.uid);
+    fd.append('password', form.password);
+    fd.append('admin_body', form.adminBody);
+    fd.append('specific_role', form.specificRole);
+    fd.append('workspace_code', form.workspaceCode);
+    if (proofFile) fd.append('proof', proofFile);
 
-      const fd = new FormData();
-      fd.append('full_name', officerName);
-      fd.append('email', officerEmail);
-      fd.append('phone', form.phone || '');
-      fd.append('uid', form.uid || '');
-      fd.append('password', form.password || '');
-      fd.append('scope', form.adminBody || 'General');
-      fd.append('desks', 5);
-      fd.append('workers', 20);
-      fd.append('sla', 24);
+    const res = await axios.post('http://localhost:8000/api/gov/finalize-onboarding', fd);
 
-      await axios.post('http://localhost:8000/api/v1/system/configure', fd);
-      
-      login({
-      ...user,
-      email: officerEmail,
-      name: officerName,
-      role: 'government',
-      is_setup_complete: 1 
+    // Update Auth State with the actual Role (e.g. Sarpanch) for the Dashboard header
+    login({
+      name: form.name,
+      email: form.email,
+      role: form.specificRole
     });
 
-      toast.success("✅ Sovereign Initialization Complete. Identity Anchored.");
-      localStorage.removeItem('gov_signup_email');
-      setTimeout(() => navigate('/dashboard'), 2000);
-    } catch (err) {
-      // CRASH FIX: Always coerce error to a string — never let a plain object reach React children
-      const raw = err.response?.data?.detail;
-      const msg = Array.isArray(raw)
-        ? raw[0]?.msg || JSON.stringify(raw[0])
-        : typeof raw === 'string'
-          ? raw
-          : err.message || "Setup Error — please retry.";
-      setError(String(msg));
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    toast.success("✅ Protocol Finalized.");
+    navigate('/dashboard');
+  } catch (err) {
+    setError(err.response?.data?.detail || "Finalization Error");
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const steps = [
     { n: 1, title: 'Mobile Sync' },

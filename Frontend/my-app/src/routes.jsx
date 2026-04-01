@@ -21,19 +21,15 @@ export const router = createBrowserRouter([
   { path: '/citizen-login', element: <LoginPage defaultRole="citizen" /> },
   { path: '/gov-signup', element: <GovSignup /> },
   { path: '/admin-onboarding', element: <AdminOnboarding /> },
+  { path: '/citizen-signup', element: <CitizenSignup /> },
   
   // GOVERNMENT CONSOLE - Layout is INSIDE the router here
   {
     path: '/dashboard',
-    element: (
-      <ProtectedRoute allowedRole="government">
-        <Layout />
-      </ProtectedRoute>
-    ),
-    children: [
-      { index: true, element: <Dashboard /> },
-      { path: ':category', element: <Dashboard /> },
-      { path: 'visualization', element: <Visualization /> },
+  element: <Layout />, // Removed <ProtectedRoute> wrapper
+  children: [
+    { index: true, element: <Dashboard /> },
+    { path: 'visualization', element: <Visualization /> },,
       { path: 'officers', element: <OfficersPage /> },
       { path: 'statistics', element: <StatisticsPage /> },
       { path: 'email', element: <EmailPage /> },

@@ -72,6 +72,26 @@ body.dark-mode .citizen-page {
   padding: 0 20px;
 }
 
+.input-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-color); /* Use your existing border variable */
+  border-radius: 8px;
+  background: var(--input-bg);
+}
+
+.input-prefix {
+  padding: 0 12px;
+  font-weight: bold;
+  color: #666;
+  border-right: 1px solid #ddd;
+}
+
+.input-group input {
+  border: none !important; /* Remove internal border */
+  flex: 1;
+}
+
 .form-section {
   background: #fff;
   border-radius: 14px;

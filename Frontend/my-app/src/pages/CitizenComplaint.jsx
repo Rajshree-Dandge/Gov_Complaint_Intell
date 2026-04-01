@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext'; // Custom hook for authentication context
 import './CitizenComplaint.css';
 
 const LANGUAGES = [
@@ -19,11 +20,12 @@ const LANGUAGES = [
 
 export default function CitizenComplaint() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const fileRef = useRef(null);
 
   const [form, setForm] = useState({
-    citizenName: '',
-    email: '',
+    citizenName:user?.name || '',
+    email: user?.email || '',
     phone: '',
     otp: '',
     description: '',
@@ -40,7 +42,7 @@ export default function CitizenComplaint() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
-  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(!!user);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   // --- LOCATION LOGIC ---
@@ -153,6 +155,12 @@ export default function CitizenComplaint() {
     const newErrors = {};
     if (!form.citizenName.trim()) newErrors.citizenName = 'Name is required';
     if (!form.email.trim()) newErrors.email = 'Email is required';
+    if (!form.phone.trim()) {
+    newErrors.phone = 'Phone number is required';
+    } 
+    else if (!/^\d{10}$/.test(form.phone.replace(/\s/g, ''))) {
+      newErrors.phone = 'Enter a valid 10-digit phone number';
+    }
     if (!form.description.trim()) newErrors.description = 'Description is required';
     if (!form.location.trim()) newErrors.location = 'Location is required';
     if (!imageFile) newErrors.image = 'Photo evidence is required';
@@ -256,16 +264,40 @@ export default function CitizenComplaint() {
           <div className="form-row">
             <div className="form-group">
               <label>Full Name <span className="required">*</span></label>
-              <input name="citizenName" value={form.citizenName} onChange={handleChange} placeholder="As per Govt ID" />
+              <input name="citizenName" value={form.citizenName} onChange={handleChange} placeholder="As per Govt ID" readOnly={!!user} />
               {errors.citizenName && <span className="error">{errors.citizenName}</span>}
             </div>
           </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Phone Number <span className="required">*</span></label>
+              <div className="input-group">
+                <span className="input-prefix">+91</span> 
+                <input
+                  type="tel"
+                  name="phone"
+                  value={form.phone}
+                  onChange={(e) => {
+                    // Allow only numbers and limit to 10 digits
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setForm({ ...form, phone: val });
+                    setErrors({ ...errors, phone: '' });
+                  }}
+                  placeholder="98765 43210"
+                  required
+                />
+              </div>
+              {errors.phone && <span className="error">{errors.phone}</span>}
+            </div>
+          </div>
+
           <div className="form-row">
             <div className="form-group">
               <label>Email Address <span className="required">*</span></label>
               <div className="input-with-action">
-                <input name="email" value={form.email} onChange={handleChange} placeholder="name@example.com" disabled={otpVerified} />
-                {!otpVerified && (
+                <input name="email" value={form.email} onChange={handleChange} placeholder="name@example.com" disabled={otpVerified || !!user} />
+                {!otpVerified && !user && (
                   <button type="button" className="btn-action" onClick={handleSendOTP} disabled={loading || !form.email}>
                     {otpSent ? "Resend" : "Send OTP"}
                   </button>
@@ -289,7 +321,7 @@ export default function CitizenComplaint() {
             </div>
           )}
 
-          {otpVerified && <div className="verification-badge">✅ Email Identity Verified</div>}
+          {(otpVerified || user) && <div className="verification-badge">✅ Email Identity Verified</div>}
         </div>
 
         <div className="form-section">

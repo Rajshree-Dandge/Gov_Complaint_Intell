@@ -70,9 +70,9 @@ class CitizenFinal(BaseModel):
     password: str
 
 # --- CORE LOGIC ---
-def init_verification_db(cursor):
+def init_verification_db(ccursor, gcursor):
     """Called from main init_db to set up verification tables."""
-    cursor.execute('''CREATE TABLE IF NOT EXISTS citizens (
+    ccursor.execute('''CREATE TABLE IF NOT EXISTS citizens (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         name TEXT, 
         email TEXT UNIQUE, 
@@ -81,27 +81,29 @@ def init_verification_db(cursor):
         password_hash TEXT, 
         role TEXT DEFAULT 'citizen'
     )''')
-    cursor.execute('''CREATE TABLE IF NOT EXISTS government_officers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        name TEXT, 
-        email TEXT UNIQUE, 
-        phone TEXT, 
-        location TEXT, 
-        uid_number TEXT, 
-        proof_path TEXT, 
-        password_hash TEXT, 
-        role TEXT DEFAULT 'government',
-        admin_role TEXT DEFAULT 'Desk_Officer', -- Body_Admin or Desk_Officer
-        admin_body TEXT, -- Gram Panchayat, BMC, etc.
-        specific_role TEXT, -- Sarpanch, JE, etc.
-        workspace_code TEXT, -- Security Key for ward
-        is_setup_complete INTEGER DEFAULT 0, -- 0 = Not complete, 1 = Complete
-        onboarding_step INTEGER DEFAULT 1,
-        is_onboarded INTEGER DEFAULT 0 -- 0 = In progress, 1 = Complete
-    )''')
+    gcursor.execute('''CREATE TABLE IF NOT EXISTS government_officers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+    name TEXT, 
+    email TEXT UNIQUE, 
+    phone TEXT, 
+    location TEXT, 
+    uid_number TEXT, 
+    proof_path TEXT, 
+    password_hash TEXT, 
+    role TEXT DEFAULT 'government',
+    admin_role TEXT DEFAULT 'Desk_Officer',
+    admin_body TEXT,
+    specific_role TEXT,
+    workspace_code TEXT,
+    is_setup INTEGER DEFAULT 0, -- <--- ADD THIS LINE
+    is_setup_complete INTEGER DEFAULT 0,
+    onboarding_step INTEGER DEFAULT 1,
+    is_onboarded INTEGER DEFAULT 0
+)''')
     
     # --- MIGRATION: Schema Hardening for Sovereign Workflow ---
     cols = {
+        "is_setup": "INTEGER DEFAULT 0",
         "is_setup_complete": "INTEGER DEFAULT 0",
         "location": "TEXT",
         "onboarding_step": "INTEGER DEFAULT 1",
@@ -112,7 +114,6 @@ def init_verification_db(cursor):
     }
     for col, definition in cols.items():
         try:
-            cursor.execute(f"ALTER TABLE government_officers ADD COLUMN {col} {definition}")
+            gcursor.execute(f"ALTER TABLE government_officers ADD COLUMN {col} {definition}")
         except sqlite3.OperationalError:
             pass # Column already exists
-

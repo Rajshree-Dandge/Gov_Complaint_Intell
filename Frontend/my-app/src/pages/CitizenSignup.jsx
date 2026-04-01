@@ -23,7 +23,7 @@ export default function CitizenSignup() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', password: '', confirmPassword: '',
+    name: '', email: '', phone: '', uid_number: '', password: '', confirmPassword: '',
   });
 
   // --- PRESERVED EFFECTS ---
@@ -39,7 +39,7 @@ export default function CitizenSignup() {
   // --- PRESERVED HANDLERS (EXACTLY AS PER YOUR LOGIC) ---
   const handleRequestOtp = async (e) => {
     e.preventDefault();
-    if (!form.email || !form.name || !form.phone) {
+    if (!form.email || !form.name ) {
       setError('Required fields missing'); return;
     }
     setSubmitting(true); setError('');
@@ -78,10 +78,17 @@ export default function CitizenSignup() {
       const dbResponse = await fetch('http://localhost:8000/register/citizen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone, password: form.password }),
+        body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone, uid_number: form.uid_number, password: form.password }),
       });
-      if (!dbResponse.ok) throw new Error('Registration failed');
-      setSuccessMsg('Account created! Redirecting...');
+
+      const data = await dbResponse.json();
+
+      if (!dbResponse.ok) {
+        // This will help you debug 422 errors specifically
+        console.error("Validation Error Details:", data.detail); 
+        throw new Error(data.detail[0]?.msg || 'Registration failed');
+      }
+    setSuccessMsg('Account created! Redirecting...');
       setTimeout(() => navigate('/citizen-login'), 2000);
     } catch (err) { setError(err.message); } finally { setSubmitting(false); }
   };
@@ -148,17 +155,26 @@ export default function CitizenSignup() {
            </div>
 
            <AnimatePresence mode="wait">
-             {error && (
-               <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="mb-4 p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-100">
-                 {error}
-               </motion.div>
-             )}
-             {successMsg && (
-               <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="mb-4 p-3 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-100">
-                 {successMsg}
-               </motion.div>
-             )}
-           </AnimatePresence>
+              {step === 'verification' ? (
+                <motion.div 
+                  key="step-verification" // ADD THIS UNIQUE KEY
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }} 
+                  exit={{ opacity: 0 }}
+                >
+                  {/* ... Your OTP/Email inputs ... */}
+                </motion.div>
+              ) : (
+                <motion.div 
+                  key="step-details" // ADD THIS UNIQUE KEY
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }} 
+                  exit={{ opacity: 0 }}
+                >
+                  {/* ... Your Password/Finalization inputs ... */}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
            {step === 'verification' ? (
              <form onSubmit={otpSent ? handleVerifyOtp : handleRequestOtp} className="space-y-4">
@@ -186,6 +202,18 @@ export default function CitizenSignup() {
            ) : (
              <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 gap-4">
+                   <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">UID / Aadhaar Number</label>
+                      <input 
+                        type="text" 
+                        name="uid_number" 
+                        value={form.uid_number} 
+                        onChange={handleChange} 
+                        className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" 
+                        placeholder="12-digit UID" 
+                        required 
+                      />
+                   </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
                       <input type="password" name="password" value={form.password} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" placeholder="••••••••" required />
