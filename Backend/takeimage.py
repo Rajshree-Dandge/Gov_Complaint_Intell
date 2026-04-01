@@ -157,7 +157,7 @@ def init_db():
     gcursor = gconn.cursor()
 
     # Citizens and Officers identity tables
-    init_verification_db(gcursor)
+    init_verification_db(gconn,gcursor)
 
     gcursor.execute('''
         CREATE TABLE IF NOT EXISTS system_config (
@@ -925,9 +925,14 @@ async def get_heatmap(
         if ward:
             query += " AND ward_zone = ?"
             params.append(ward)
+            
+        # API Guard: Fuzzy match explicitly for %Roads% if category varies/undefined
         if category and category != 'undefined':
             query += " AND ai_category LIKE ?"
             params.append(f"%{category.split(' ')[0]}%")
+        else:
+            query += " AND ai_category LIKE ?"
+            params.append("%Roads%")
             
         cursor.execute(query, params)
         complaints_data = [dict(row) for row in cursor.fetchall()]
