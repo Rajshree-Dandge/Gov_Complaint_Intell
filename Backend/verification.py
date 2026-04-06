@@ -12,7 +12,7 @@ from fastapi import HTTPException, Form, UploadFile, File
 # --- CONFIG ---
 DATABASE_PATH = os.getenv("GOVT_DB_PATH", "government.db")   # Officers & auth tables
 SMTP_EMAIL = "rajeedandge444@gmail.com" 
-SMTP_PASSWORD = "zflc iugz xhwd tgwh" 
+SMTP_PASSWORD = "zkpm slsj txnh bclm" 
 
 # Stores OTPs and verification status: { email: { "code": "...", "verified": False, "role": "..." } }
 auth_context = {}
@@ -95,6 +95,7 @@ def init_verification_db(ccursor, gcursor):
     admin_body TEXT,
     specific_role TEXT,
     workspace_code TEXT,
+    admin_domain TEXT,
     is_setup INTEGER DEFAULT 0, -- <--- ADD THIS LINE
     is_setup_complete INTEGER DEFAULT 0,
     onboarding_step INTEGER DEFAULT 1,
@@ -110,7 +111,8 @@ def init_verification_db(ccursor, gcursor):
         "admin_body": "TEXT",
         "specific_role": "TEXT",
         "workspace_code": "TEXT",
-        "is_onboarded": "INTEGER DEFAULT 0"
+        "is_onboarded": "INTEGER DEFAULT 0",
+        "admin_domain": "TEXT"
     }
     for col, definition in cols.items():
         try:

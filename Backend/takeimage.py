@@ -333,7 +333,7 @@ async def get_onboarding_status(email: str):
     """Sovereign State Machine: Retrieves persistent progress for government Officials."""
     conn = sqlite3.connect(GOVT_DB)  # Officers live in government.db
     user = conn.execute(
-        "SELECT onboarding_step, admin_body, specific_role, location, workspace_code, is_onboarded FROM government_officers WHERE email = ?", 
+        "SELECT onboarding_step, admin_body, specific_role, location, workspace_code, is_onboarded, admin_role FROM government_officers WHERE email = ?", 
         (email.lower(),)
     ).fetchone()
     conn.close()
@@ -341,7 +341,7 @@ async def get_onboarding_status(email: str):
     if not user:
         return {"step": 1, "skip_otp": False}
         
-    onboarding_step, admin_body, specific_role, location, workspace_code, is_onboarded = user
+    onboarding_step, admin_body, specific_role, location, workspace_code, is_onboarded, admin_role = user
     
     # SOVEREIGN RESUMPTION "CRACK":
     # If the email is already verified/exists but setup (onboarding) is incomplete, SKIP OTP
@@ -353,13 +353,15 @@ async def get_onboarding_status(email: str):
             "admin_body": admin_body,
             "specific_role": specific_role,
             "location": location,
-            "workspace_code": workspace_code
+            "workspace_code": workspace_code,
+            "admin_role": admin_role
         }
         
     return {
         "step": onboarding_step,
         "skip_otp": False,
-        "is_onboarded": 1
+        "is_onboarded": 1,
+        "admin_role": admin_role
     }
 
 @app.patch("/api/onboarding/update-step")
@@ -405,7 +407,7 @@ async def check_workspace_code(code: str, location: str):
     # REVOLUTIONARY DEVELOPER: In this simplified logic, we check if an Admin exists for this location with this code
     conn = sqlite3.connect(GOVT_DB)  # Officers live in government.db
     admin = conn.execute(
-        "SELECT email FROM government_officers WHERE workspace_code = ? AND location = ? AND (admin_role = 'Admin' OR admin_role = 'Sarpanch' OR admin_role = 'Assistant Commissioner')", 
+        "SELECT name, email, specific_role FROM government_officers WHERE workspace_code = ? AND location = ? AND (admin_role = 'Admin' OR specific_role IN ('Sarpanch', 'Assistant Commissioner', 'Chief Officer'))", 
         (code, location)
     ).fetchone()
     conn.close()
@@ -413,7 +415,13 @@ async def check_workspace_code(code: str, location: str):
     if not admin:
         raise HTTPException(status_code=403, detail="INVALID SECURITY CODE: The entered key does not match any Lead Administrator in this jurisdiction.")
     
-    return {"status": "valid", "admin": admin[0]}
+    return {
+        "status": "valid", 
+        "admin_name": admin[0],
+        "admin_email": admin[1],
+        "admin_title": admin[2],
+        "message": "Workspace Handshake Successful. Admin Auth Confirmed."
+    }
 
 @app.post("/register/government")
 async def register_government(
@@ -426,6 +434,7 @@ async def register_government(
     admin_body: str = Form(...),
     specific_role: str = Form(...),
     workspace_code: Optional[str] = Form(None),
+    admin_domain: Optional[str] = Form(None),
     admin_role: str = Form("Desk_Officer"), # Default to Desk_Officer
     proof: Optional[UploadFile] = File(None)  # Optional — can be submitted later
 ):
@@ -457,10 +466,10 @@ async def register_government(
             """UPDATE government_officers SET 
             name = ?, phone = ?, uid_number = ?, proof_path = ?, 
             password_hash = ?, admin_role = ?, location = ?, 
-            admin_body = ?, specific_role = ?, workspace_code = ?, 
-            onboarding_step = 9, is_onboarded = 1 
+            admin_body = ?, specific_role = ?, workspace_code = ?, admin_domain = ?,
+            onboarding_step = 10, is_onboarded = 1 
             WHERE email = ?""",
-            (name, phone, uid, proof_path, hash_password(password), final_admin_role, location, admin_body, specific_role, workspace_code, email)
+            (name, phone, uid, proof_path, hash_password(password), final_admin_role, location, admin_body, specific_role, workspace_code, admin_domain, email)
         )
         conn.commit()
         
@@ -714,65 +723,64 @@ async def get_system_status():
     is_complete = 1  # DEPLOYMENT MODE: Standardized Production Standard
     return {"is_setup_complete": is_complete}
 
+# --- REVOLUTIONARY DEVELOPER: UNIFIED ONBOARDING ENDPOINT ---
 @app.post("/api/v1/system/configure")
 async def configure_system(
-    full_name: str = Form(...),
-    email: str = Form(...),
+    full_name: str = Form(""),
+    email: str = Form(""),
     phone: str = Form(""),
     uid: str = Form(""),
     password: str = Form(""),
-    scope: str = Form(...),
+    scope: str = Form("General"),
+    specific_role: str = Form("Desk_Officer"),
+    workspace_code: str = Form(""),
+    admin_domain: Optional[str] = Form("All"),
+    sla: int = Form(24),
     desks: int = Form(5),
     workers: int = Form(20),
-    sla: int = Form(24)
+    current_user: str = Depends(get_current_user) # Secure JWT Check
 ):
     """
-    Top-Down Authority: Unified System Moulding.
-    Restricted to Administrative Body Leads.
-    STEP A: Hash and persist officer PII.
-    STEP B: Anchor Admin identity to system_config.
+    Step 10: The Sovereign Handshake.
+    This anchors Identity (PII) and Governance Logic (Config) simultaneously.
     """
-    email = email.strip().lower()
+    target_email = email.strip().lower()
 
-    conn = sqlite3.connect(GOVT_DB)  # Officers & system_config live in government.db
+    conn = sqlite3.connect(GOVT_DB)
     cursor = conn.cursor()
 
-    # Verify Administrative Role for this command (Strict RBAC)
-    cursor.execute("SELECT admin_role FROM government_officers WHERE email = ?", (email,))
-    role_record = cursor.fetchone()
-    if not role_record or role_record[0].lower() not in ('admin', 'desk_officer'):
-        conn.close()
-        raise HTTPException(
-            status_code=403,
-            detail="AUTHORITY DENIED: Only the System Admin can access the setup table."
+    try:
+        # 1. Update the Individual Officer Profile (Identity Anchor)
+        # We save the PII collected during the 9 stages
+        new_hash = hash_password(password)
+        cursor.execute('''
+            UPDATE government_officers 
+            SET phone = ?, uid_number = ?, password_hash = ?, 
+                admin_body = ?, specific_role = ?, workspace_code = ?, 
+                admin_domain = ?, is_setup_complete = 1, is_onboarded = 1, onboarding_step = 10
+            WHERE email = ?
+        ''', (phone, uid, new_hash, scope, specific_role, workspace_code, admin_domain, target_email))
+
+        # 2. Update the Global System Configuration (Administrative Moulding)
+        # This defines how the entire body functions (SLA, Workforce)
+        cursor.execute("DELETE FROM system_config")
+        cursor.execute('''
+            INSERT INTO system_config (
+                admin_email, admin_name, administrative_scope, sla_hours, 
+                desk_officers, field_workers, category_mapping
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            (target_email, full_name, scope, sla, desks, workers, "{}")
         )
 
-    # STEP A: Hash password and persist officer PII from onboarding stages
-    new_hash = hash_password(password) if password else None
-    update_fields = ["phone = ?", "uid_number = ?", "is_setup_complete = 1"]
-    update_vals = [phone, uid]
-    if new_hash:
-        update_fields.append("password_hash = ?")
-        update_vals.append(new_hash)
-    update_vals.append(email)
-    cursor.execute(
-        f"UPDATE government_officers SET {', '.join(update_fields)} WHERE email = ?",
-        tuple(update_vals)
-    )
+        conn.commit()
+        return {"status": "success", "message": "Administrative Reality Anchored.", "is_setup_complete": 1}
 
-    # STEP B: Anchor Admin identity and scope to system_config
-    cursor.execute("DELETE FROM system_config")
-    cursor.execute(
-        "INSERT INTO system_config (admin_email, admin_name, administrative_scope, sla_hours, desk_officers, field_workers) VALUES (?, ?, ?, ?, ?, ?)",
-        (email, full_name, scope, sla, desks, workers)
-    )
-    # Global sync: All admin personnel are now on the same operational page
-    cursor.execute("UPDATE government_officers SET is_setup_complete = 1")
-
-    conn.commit()
-    conn.close()
-    return {"status": "success", "message": "System Moulded: The Administrative Reality has been updated.", "admin": email}
-
+    except Exception as e:
+        conn.rollback()
+        print(f"Sovereign Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
 @app.get("/api/v1/system/config")
 async def get_system_config(current_user: str = Depends(get_current_user)):
     """Fetch for UI Moulding (Protected)"""

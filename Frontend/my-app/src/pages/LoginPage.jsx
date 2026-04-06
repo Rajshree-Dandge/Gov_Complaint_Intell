@@ -79,18 +79,29 @@ export default function LoginPage({ defaultRole }) {
     console.log("Server Response:", res.data);
 
     if (res.data.status === 'success') {
-      // login() comes from AuthContext to set local state/localStorage
-      login(res.data.user); 
-      console.log("Login Success:", res.data.user);
+      const is_onboarded_flag = res.data.is_setup_complete === 1 || res.data.is_setup_complete === true;
+      login(
+        { email, role: res.data.role, is_onboarded: is_onboarded_flag, onboarding_step: res.data.onboarding_step },
+        res.data.token
+      ); 
+      console.log("Login Success:", res.data);
       toast.success("Identity Verified");
-      navigate(res.data.redirect_to); // Redirects to /dashboard or /citizen-complaint
+      
+      if (res.data.role === 'government') {
+        if (!is_onboarded_flag) {
+          navigate('/admin-onboarding');
+        } else {
+          navigate('/gov-landing');
+        }
+      } else {
+        navigate('/citizen');
+      }
     }
   } catch (err) {
     console.error("FULL ERROR OBJECT:", err);
     console.error("SERVER ERROR DETAIL:", err.response?.data?.detail);
     const errorMsg = err.response?.data?.detail || "Verification failed. Check console.";
     setError(errorMsg);
-    // toast.error(errorMsg);
   } finally {
     setSubmitting(false);
   }

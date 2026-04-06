@@ -19,9 +19,14 @@ export function AuthProvider({ children }) {
   
   // Added: Manually set a user from the Python Backend response
   const setLocalUser = (userData, token = null) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    if (token) localStorage.setItem('auth_token', token);
+    setUser((prev) => {
+      const mergedUser = { ...prev, ...userData };
+      localStorage.setItem('user', JSON.stringify(mergedUser));
+      return mergedUser;
+    });
+    if (token) {
+      localStorage.setItem('token', token);
+    }
   };
 
   // Alias: 'login' is the same as setLocalUser — called from LoginPage after OTP verify

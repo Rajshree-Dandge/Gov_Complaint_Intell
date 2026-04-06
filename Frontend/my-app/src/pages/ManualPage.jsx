@@ -287,7 +287,7 @@ export default function ManualPage() {
                      <li className="flex items-center gap-3"><CheckCircle2 size={16} className="text-emerald-500" /> Document verification</li>
                      <li className="flex items-center gap-3"><CheckCircle2 size={16} className="text-emerald-500" /> Inter-department coordination</li>
                   </ul>
-                  <button onClick={() => navigate('/dashboard')} className="w-full bg-white text-slate-900 py-5 rounded-2xl font-bold text-lg hover:scale-[1.02] transition-transform flex items-center justify-center gap-3">
+                  <button onClick={() => navigate('/login')} className="w-full bg-white text-slate-900 py-5 rounded-2xl font-bold text-lg hover:scale-[1.02] transition-transform flex items-center justify-center gap-3">
                      Access Command Center <ArrowRight />
                   </button>
                </div>
