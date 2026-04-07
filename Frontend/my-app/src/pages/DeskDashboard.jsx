@@ -8,23 +8,65 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import './DeskDashboard.css';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
+import { useEffect } from 'react';
 
-// --- DUMMY DATA FOR UI ---
-const RECENT_COMPLAINTS = [
-    { id: "GRV-8847", loc: "Zone A, Sector 5", severity: 9.2, status: "Critical", contractor: "Rajesh Contractors" },
-    { id: "GRV-8846", loc: "Zone B, Sector 3", severity: 7.8, status: "High", contractor: "Sharma & Co" },
-    { id: "GRV-8845", loc: "Zone C, Sector 1", severity: 6.5, status: "Medium", contractor: "Kumar Services" },
-    { id: "GRV-8844", loc: "Zone A, Sector 2", severity: 8.8, status: "High", contractor: "Patel Group" },
-    { id: "GRV-8843", loc: "Zone D, Sector 4", severity: 4.2, status: "Low", contractor: "Singh Enterprises" },
-];
+const getPriorityInfo = (score) => {
+    if (score >= 8.0) return { label: '🚨 CRITICAL', class: 'status-tag critical' };
+    if (score >= 5.0) return { label: '⚠️ HIGH', class: 'status-tag high' };
+    if (score >= 3.0) return { label: '🟡 MEDIUM', class: 'status-tag medium' };
+    return { label: '⚪ LOW', class: 'status-tag low' };
+};
 
-const CHART_DATA = [
-    { day: 'Mon', val: 30 }, { day: 'Tue', val: 55 }, { day: 'Wed', val: 40 },
-    { day: 'Thu', val: 70 }, { day: 'Fri', val: 85 }, { day: 'Sat', val: 60 }, { day: 'Sun', val: 95 }
-];
 
 export default function DeskDashboard() {
-    const [activeTab, setActiveTab] = useState('active');
+    const navigate = useNavigate();
+    const { user } = useAuth(); // Get real officer details
+    const [chartData, setChartData] = useState([
+        { day: 'Mon', val: 0 }, { day: 'Tue', val: 0 }, { day: 'Wed', val: 0 },
+        { day: 'Thu', val: 0 }, { day: 'Fri', val: 0 }, { day: 'Sat', val: 0 }, { day: 'Sun', val: 0 }
+    ]);
+
+    // 1. STATE MANAGEMENT (Replacing static dummy data)
+    const [complaints, setComplaints] = useState([]);
+    const [metrics, setMetrics] = useState({ total_today: 0, urgent_count: "00", sla_compliance: "94%" });
+    const [loading, setLoading] = useState(true);
+
+    // 2. REAL-TIME SYNC LOGIC
+    const syncDashboard = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const params = {
+                ward: user?.ward || localStorage.getItem('gov_ward'),
+                domain: user?.admin_domain || "Roads & Infrastructure"
+            };
+            const config = { headers: { Authorization: `Bearer ${token}` }, params };
+
+            const [statsRes, inboxRes, chartRes] = await Promise.all([
+                axios.get("http://127.0.0.1:8000/api/v1/desk/dashboard-stats", config),
+                axios.get("http://127.0.0.1:8000/api/v1/desk/inbox", config),
+                // NEW: Fetching real trend data
+                axios.get("http://127.0.0.1:8000/api/v1/desk/severity-trend", config)
+            ]);
+
+            setMetrics(statsRes.data);
+            setComplaints(inboxRes.data);
+            setChartData(chartRes.data); // Update the chart with real DB trends
+        } catch (err) {
+            console.error("Dashboard Sync Error:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+    useEffect(() => {
+        syncDashboard();
+    }, [user]);
+
+    if (loading) return <div className="war-room-loader"><span>Syncing Operational Triage...</span></div>;
+
+
 
     return (
         <div className="desk-root bg-[#FDFDFD] min-h-screen font-sans">
@@ -47,8 +89,8 @@ export default function DeskDashboard() {
                         <div className="profile-pill">
                             <User size={18} />
                             <div className="profile-text">
-                                <strong>Officer_Raj</strong>
-                                <small>Desk 1 (Roads)</small>
+                                <strong>{user?.name || "Officer"}</strong>
+                                <small>{user?.admin_role} ({user?.admin_domain || "Roads"})</small>
                             </div>
                         </div>
                     </div>
@@ -61,26 +103,43 @@ export default function DeskDashboard() {
                     {/* --- LEFT SECTION: STATS & INBOX (70%) --- */}
                     <div className="left-pane">
                         <header className="pane-header">
-                            <h1>Grievance Portfolio</h1>
-                            <p>Managing verified Road & Infrastructure grievances for <strong>Ward 5</strong></p>
+                            <h1 className="text-3xl font-black tracking-tight">Grievance Portfolio</h1>
+                            <p className="text-slate-500 font-medium">
+                                Administrative Domain: <span className="text-emerald-600">{user?.admin_domain || "Roads"}</span>
+                                | Jurisdiction: <span className="font-bold">{user?.ward || "General Zone"}</span>
+                            </p>
                         </header>
 
                         {/* QUICK STATS CARDS */}
                         <div className="metrics-row">
                             <div className="metric-card">
                                 <small>TOTAL TODAY</small>
-                                <h2>12</h2>
+                                <h2>{metrics.total_today}</h2>
                                 <div className="trend positive"><TrendingUp size={12} /> +12%</div>
                             </div>
                             <div className="metric-card">
                                 <small>URGENT (8.0+)</small>
-                                <h2 className="text-rose-500">04</h2>
+                                <h2 className="text-rose-500">{metrics.urgent_count}</h2>
                                 <p className="subtext">Requires immediate action</p>
                             </div>
                             <div className="metric-card">
                                 <small>SLA COMPLIANCE</small>
-                                <h2>94%</h2>
-                                <div className="progress-bar-small"><div className="fill" style={{ width: '94%' }}></div></div>
+                                {/* Visual Triage: Red if compliance is low, Emerald if high */}
+                                <h2 style={{ color: parseInt(metrics.sla_compliance) < 75 ? '#F43F5E' : '#10B981' }}>
+                                    {metrics.sla_compliance}
+                                </h2>
+                                <div className="progress-bar-small">
+                                    <div
+                                        className="fill"
+                                        style={{
+                                            width: metrics.sla_compliance,
+                                            background: parseInt(metrics.sla_compliance) < 75 ? '#F43F5E' : '#10B981'
+                                        }}
+                                    ></div>
+                                </div>
+                                <p className="subtext">
+                                    {parseInt(metrics.sla_compliance) > 90 ? "Excellent Efficiency" : "Immediate Action Required"}
+                                </p>
                             </div>
                         </div>
 
@@ -107,25 +166,37 @@ export default function DeskDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {RECENT_COMPLAINTS.map((item) => (
-                                        <tr key={item.id} className="hover-row">
-                                            <td className="id-cell"><strong>{item.id}</strong></td>
-                                            <td className="loc-cell"><MapIcon size={14} className="inline mr-1" /> {item.loc}</td>
-                                            <td>
-                                                <div className="score-meter">
-                                                    <div className="meter-bg"><div className="meter-fill" style={{ width: `${item.severity * 10}%`, background: item.severity > 8 ? '#F43F5E' : '#10B981' }}></div></div>
-                                                    <span>{item.severity}</span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className={`status-tag ${item.status.toLowerCase()}`}>
-                                                    {item.status}
-                                                </span>
-                                            </td>
-                                            <td className="contractor-cell">{item.contractor}</td>
-                                            <td><MoreVertical size={16} className="text-slate-300 cursor-pointer" /></td>
-                                        </tr>
-                                    ))}
+                                    {complaints.map((item) => {
+                                        // 1. Get the dynamic label and class based on AI Score
+                                        const prio = getPriorityInfo(item.ai_score);
+
+                                        return (
+                                            <tr key={item.id} className={`hover-row ${item.ai_score >= 8 ? 'row-critical-alert' : ''}`}>
+                                                <td className="id-cell"><strong>#{item.id}</strong></td>
+
+                                                {/* 2. Using 'location' from Geopy Reverse Geocoding */}
+                                                <td className="loc-cell"><MapIcon size={14} className="inline mr-1" /> {item.location}</td>
+
+                                                <td>
+                                                    <div className="score-meter">
+                                                        <span>{(item.ai_score || 0).toFixed(1)} / 10</span>
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    {/* 3. Using the AI-Verified Risk Label, not the workflow status */}
+                                                    <span className={`status-tag ${prio.class}`}>
+                                                        {prio.label}
+                                                    </span>
+                                                </td>
+
+                                                {/* 4. Using 'contractor_id' from the auto-assignment logic */}
+                                                <td className="contractor-cell">{item.contractor_id || "Awaiting Dispatch"}</td>
+
+                                                <td><MoreVertical size={16} className="text-slate-300 cursor-pointer" /></td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -150,7 +221,7 @@ export default function DeskDashboard() {
                             <h4>7-Day Severity Trend</h4>
                             <div className="h-32 w-full mt-4">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={CHART_DATA}>
+                                    <AreaChart data={chartData}>
                                         <Area type="monotone" dataKey="val" stroke="#10B981" fill="#D1FAE5" />
                                     </AreaChart>
                                 </ResponsiveContainer>

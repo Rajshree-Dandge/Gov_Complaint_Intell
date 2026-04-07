@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/Firebase';
 import { validateUID } from '../utils/uidValidation';
+import axios from 'axios';
 
 const AuthContext = createContext();
 
@@ -16,7 +17,7 @@ export function AuthProvider({ children }) {
   // const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   // Added: Manually set a user from the Python Backend response
   const setLocalUser = (userData, token = null) => {
     setUser((prev) => {
@@ -32,21 +33,41 @@ export function AuthProvider({ children }) {
   // Alias: 'login' is the same as setLocalUser — called from LoginPage after OTP verify
   const login = setLocalUser;
 
-  useEffect(() => {
-    // 1. Check for a locally saved session first (for page refreshes)
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+  const fetchProfile = async () => {
+    // 1. Ensure we use the exact key saved during login (likely 'token')
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      console.warn("📡 No token found. Please log in.");
+      setLoading(false);
+      return;
     }
 
-    // 2. Listen for Firebase Auth changes
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
+    try {
+      const res = await axios.get("http://127.0.0.1:8000/api/v1/user/profile", {
+        headers: {
+          // 2. CRITICAL: Add the Axios header exactly as requested
+          Authorization: "Bearer " + token
+        }
+      });
+
+      console.log("✅ Profile Re-hydrated:", res.data);
+      setUser(res.data);
+    } catch (err) {
+      // 3. If unauthorized, wipe the dead token
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token');
+        setUser(null);
       }
+      console.error("❌ Profile Handshake Failed:", err.response?.data?.detail);
+    } finally {
       setLoading(false);
-    });
-    return () => unsubscribe();
+    }
+  };
+  
+  // SOVEREIGN RE-HYDRATION: Trigger on page reload
+  useEffect(() => {
+    fetchProfile();
   }, []);
 
   const signUpWithEmail = async (email, password, name, role = 'citizen', uidNumber) => {
@@ -83,7 +104,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('user'); 
+    localStorage.removeItem('user');
     signOut(auth);
     setUser(null);
   };

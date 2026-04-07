@@ -10,21 +10,39 @@ import GovSignup from "./pages/GovSignup";
 import CitizenComplaint from "./pages/CitizenComplaint";
 import AdminOnboarding from "./pages/AdminOnboarding";
 import { Layout } from './components/Layout.jsx';
-import { Dashboard } from './pages/Dashboard.jsx';
+
+// --- ROLE-SPECIFIC COMPONENTS ---
+import { Dashboard } from './pages/Dashboard.jsx'; // For Admin
+import DeskDashboard from './pages/DeskDashboard.jsx'; // For Desk Officer / Contractor
+
 import Visualization from './pages/Visualization.jsx';
 import OfficersPage from './pages/OfficersPage.jsx';
 import StatisticsPage from './pages/StatisticsPage.jsx';
 import EmailPage from './pages/EmailPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 
-// 2. PROTECTED ROUTE WRAPPERS
 import ProtectedRoute from "./components/ProtectedRoute";
 import CitizenProtectedRoute from "./components/CitizenProtectedRoute";
 
 /**
- * REVOLUTIONARY DEVELOPER: THE ADMINISTRATIVE HANDSHAKE
- * This component acts as the 'State-Aware Gatekeeper'.
- * It moulds the path based on whether the Admin has completed the setup.
+ * REVOLUTIONARY DEVELOPER: THE DASHBOARD SWITCHER
+ * This component "moulds" the main dashboard based on the user's role.
+ */
+const DashboardSwitcher = () => {
+  const { user } = useAuth();
+  const role = user?.admin_role || user?.role;
+
+  // ROADS & INFRA LOGIC: Admin sees the Strategic Dashboard, Staff see the Operational Hub
+  if (role === 'Admin' || role === 'Sarpanch') {
+    return <Dashboard />;
+  }
+
+  // Default for Desk Officers and Contractors
+  return <DeskDashboard />;
+};
+
+/**
+ * IDENTITY HANDSHAKE: THE ADMINISTRATIVE GATEKEEPER
  */
 const GovernmentHandshake = () => {
   const { user, isAuthenticated, loading } = useAuth();
@@ -32,17 +50,14 @@ const GovernmentHandshake = () => {
   if (loading) return <div className="war-room-loader"><span>Syncing Sovereign Identity...</span></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-  // --- ADMINISTRATIVE MOULDING LOGIC ---
-  // If the officer is an Admin but hasn't configured the body (Gram/BMC/City)
-  if (user?.admin_role === 'Admin' && user?.is_setup_complete === 0) {
+  // RESUMPTION LOGIC: If setup is incomplete, trap them in onboarding
+  if (user?.is_setup_complete === 0) {
     return <Navigate to="/admin-onboarding" replace />;
   }
 
-  // If setup is complete, allow them to enter the Dashboard Layout
   return <Outlet />;
 };
 
-// 3. THE MASTER ROUTER DEFINITION
 export const router = createBrowserRouter([
   { path: '/', element: <ManualPage /> },
   { path: '/login', element: <LoginPage defaultRole="government" /> },
@@ -60,9 +75,10 @@ export const router = createBrowserRouter([
     ),
     children: [
       {
-        element: <Layout />, // Layout wraps all sub-pages
+        element: <Layout />,
         children: [
-          { index: true, element: <Dashboard /> },
+          // THE "CRACK": index route now uses the Switcher
+          { index: true, element: <DashboardSwitcher /> },
           { path: 'visualization', element: <Visualization /> },
           { path: 'officers', element: <OfficersPage /> },
           { path: 'statistics', element: <StatisticsPage /> },
@@ -78,6 +94,5 @@ export const router = createBrowserRouter([
     element: <CitizenProtectedRoute><CitizenComplaint /></CitizenProtectedRoute>,
   },
 
-  // Clean redirect from old landing path to the new Handshake Hub
   { path: '/gov-landing', element: <Navigate to="/dashboard" replace /> }
 ]);

@@ -68,44 +68,49 @@ export default function LoginPage({ defaultRole }) {
   };
 
   const handleVerifyAndLogin = async (e) => {
-  e.preventDefault();
-  setSubmitting(true);
-  try {
-    const res = await axios.post('http://localhost:8000/api/verify-otp', {
-      email,
-      code: otp,
-    });
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const res = await axios.post('http://localhost:8000/api/verify-otp', {
+        email,
+        code: otp,
+      });
 
-    console.log("Server Response:", res.data);
+      console.log("Server Response:", res.data);
 
-    if (res.data.status === 'success') {
-      const is_onboarded_flag = res.data.is_setup_complete === 1 || res.data.is_setup_complete === true;
-      login(
-        { email, role: res.data.role, is_onboarded: is_onboarded_flag, onboarding_step: res.data.onboarding_step },
-        res.data.token
-      ); 
-      console.log("Login Success:", res.data);
-      toast.success("Identity Verified");
-      
-      if (res.data.role === 'government') {
-        if (!is_onboarded_flag) {
-          navigate('/admin-onboarding');
+      if (res.data.status === 'success') {
+        // If backend returns is_setup_complete, use it. Otherwise default to 0.
+        const setupDone = res.data.is_setup_complete === 1;
+
+        login({
+          email,
+          role: res.data.role,
+          is_onboarded: setupDone,
+          onboarding_step: res.data.onboarding_step
+        }, res.data.token);
+
+        toast.success("Identity Verified");
+
+        // REVOLUTIONARY REDIRECT: Mould the path immediately
+        if (res.data.role === 'government') {
+          if (!setupDone) {
+            navigate('/admin-onboarding'); // Go to 10-stage wizard
+          } else {
+            navigate('/gov-landing'); // Go to 4-Card Dashboard
+          }
         } else {
-          navigate('/gov-landing');
+          navigate('/citizen');
         }
-      } else {
-        navigate('/citizen');
       }
+    } catch (err) {
+      console.error("FULL ERROR OBJECT:", err);
+      console.error("SERVER ERROR DETAIL:", err.response?.data?.detail);
+      const errorMsg = err.response?.data?.detail || "Verification failed. Check console.";
+      setError(errorMsg);
+    } finally {
+      setSubmitting(false);
     }
-  } catch (err) {
-    console.error("FULL ERROR OBJECT:", err);
-    console.error("SERVER ERROR DETAIL:", err.response?.data?.detail);
-    const errorMsg = err.response?.data?.detail || "Verification failed. Check console.";
-    setError(errorMsg);
-  } finally {
-    setSubmitting(false);
-  }
-};
+  };
 
   const icon = defaultRole === 'government' ? '🏛️' : '👤';
   const title = defaultRole === 'government' ? 'Government Login' : 'Citizen Login';

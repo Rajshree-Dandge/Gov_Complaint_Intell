@@ -22,6 +22,7 @@ from verification import (
     auth_context, OTPRequest, VerifyRequest, CitizenFinal, 
     init_verification_db, send_email, hash_password
 )
+from desk_routes import router as desk_router
 
 # Load environment variables
 load_dotenv()
@@ -102,6 +103,7 @@ async def check_admin_authority(current_user: str = Depends(get_current_user)):
 
 # --- 3. APP SETUP ---
 app = FastAPI(title="Nivaran Backend - Enterprise Verified AI Pipeline")
+app.include_router(desk_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -235,6 +237,7 @@ async def send_otp(data: OTPRequest, background_tasks: BackgroundTasks):
             )
 
     otp_code = str(random.randint(100000, 999999))
+    print(f"Generated OTP for {email}: {otp_code}")
     # Stable Dictionary Handshake
     auth_context[email] = {
         "code": otp_code,
@@ -655,30 +658,54 @@ async def run_task_back(complaint_id: int, file_loc: str, description: str, loca
 
 
 # --- 7. GOVT LOGIN (JWT ENABLED) ---
+# --- 7. GOVT LOGIN (JWT ENABLED) ---
 @app.post("/login")
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
-    """Revolutionary Developer Security: Enterprise Standard OAuth2"""
+    """Sovereign Security: Enterprise Standard OAuth2 with Profile Fetching"""
     print(f"Testing SECURE Login: {form_data.username}")
     
-    # Top-Down Authority Check: Determine setup status from system_config
     conn = sqlite3.connect(GOVT_DB)
     cursor = conn.cursor()
-    cursor.execute("SELECT admin_role FROM government_officers WHERE email = ?", (form_data.username,))
+    
+    # 🔍 REVOLUTIONARY FIX: Fetch name, role, domain, location (ward), and setup status from DB
+    cursor.execute("SELECT name, admin_role, admin_domain, location, is_setup_complete FROM government_officers WHERE email = ?", (form_data.username,))
     user_data = cursor.fetchone()
     
     config_exists = cursor.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
     conn.close()
     
-    admin_role = user_data[0] if user_data else "Desk_Officer"
-    is_setup_complete = 1  # DEPLOYMENT MODE: Standardized Production Standard
+    # Extract data or set defaults
+    real_name = user_data[0] if user_data else "Officer"
+    admin_role = user_data[1] if user_data else "Desk_Officer"
+    # FAIL-SAFE: If domain is null or "General", default to "Roads"
+    admin_domain = user_data[2] if (user_data and user_data[2] and user_data[2].lower() != "general") else "Roads"
+    location = user_data[3] if user_data else "General Zone"
+    is_setup_complete = user_data[4] if user_data else 0 # Use DB value instead of hardcoded 1
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    # We bake the domain and location into the token for persistence
     access_token = create_access_token(
         data={"sub": form_data.username, "admin_role": admin_role}, 
         expires_delta=access_token_expires
     )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "status": "success",
+        "user": {
+            "name": real_name,
+            "email": form_data.username,
+            "admin_role": admin_role,
+            "admin_domain": admin_domain, # Now React will receive it!
+            "ward": location,
+            "is_setup_complete": is_setup_complete
+        },
+        "message": "Access Granted"
+    }
     
     return {
         "access_token": access_token,
@@ -692,26 +719,29 @@ async def login(
 
 @app.get("/api/v1/user/profile")
 async def get_user_profile(current_user: str = Depends(get_current_user)):
-    """Administrative Identity Check: Returns profile details including setup status."""
     conn = sqlite3.connect(GOVT_DB)
     cursor = conn.cursor()
-    cursor.execute("SELECT admin_role, location FROM government_officers WHERE email = ?", (current_user,))
-    user_data = cursor.fetchone()
     
-    config_exists = cursor.execute("SELECT 1 FROM system_config LIMIT 1").fetchone()
+    # 🔍 REVOLUTIONARY FIX: Fetch name, role, location, domain, and setup status
+    cursor.execute(
+        "SELECT name, admin_role, location, admin_domain, is_setup_complete FROM government_officers WHERE email = ?", 
+        (current_user,)
+    )
+    user_data = cursor.fetchone()
     conn.close()
     
-    admin_role = user_data[0] if user_data else "Desk_Officer"
-    location = user_data[1] if user_data else "General"
-    is_setup_complete = 1  # DEPLOYMENT MODE: Standardized Production Standard
-    
+    if not user_data:
+        raise HTTPException(status_code=404, detail="Officer profile not found")
+
+    # Mapping indices: [0]=name, [1]=role, [2]=location, [3]=domain, [4]=is_setup_complete
     return {
         "email": current_user,
-        "admin_role": admin_role,
-        "ward": location,
-        "is_setup_complete": is_setup_complete
+        "name": user_data[0],
+        "admin_role": user_data[1],
+        "ward": user_data[2],
+        "is_setup_complete": user_data[4],
+        "admin_domain": user_data[3] if user_data[3] else "Roads" # FAIL-SAFE fallback
     }
-
 @app.get("/api/v1/system/status")
 async def get_system_status():
     """Gatekeeper Logic: Dynamic status check via system_config table."""
@@ -731,10 +761,10 @@ async def configure_system(
     phone: str = Form(""),
     uid: str = Form(""),
     password: str = Form(""),
-    scope: str = Form("General"),
-    specific_role: str = Form("Desk_Officer"),
+    scope: str = Form(""),
+    specific_role: str = Form(""),
     workspace_code: str = Form(""),
-    admin_domain: Optional[str] = Form("All"),
+    admin_domain: Optional[str] = Form("None"),
     sla: int = Form(24),
     desks: int = Form(5),
     workers: int = Form(20),
@@ -744,7 +774,7 @@ async def configure_system(
     Step 10: The Sovereign Handshake.
     This anchors Identity (PII) and Governance Logic (Config) simultaneously.
     """
-    target_email = email.strip().lower()
+    target_email = current_user
 
     conn = sqlite3.connect(GOVT_DB)
     cursor = conn.cursor()
@@ -773,7 +803,7 @@ async def configure_system(
         )
 
         conn.commit()
-        return {"status": "success", "message": "Administrative Reality Anchored.", "is_setup_complete": 1}
+        return {"status": "success", "is_setup_complete": 1}
 
     except Exception as e:
         conn.rollback()

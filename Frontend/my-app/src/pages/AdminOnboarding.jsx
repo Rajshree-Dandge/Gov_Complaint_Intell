@@ -136,14 +136,14 @@ export default function AdminOnboarding() {
       setTimeout(async () => {
         await syncStep(9, 'workspace_code', form.workspaceCode);
       }, 1800);
-    } catch (err) { 
+    } catch (err) {
       let msg = "Invalid Key.";
       if (err.response?.data?.detail) {
-        msg = typeof err.response.data.detail === 'string' 
-          ? err.response.data.detail 
+        msg = typeof err.response.data.detail === 'string'
+          ? err.response.data.detail
           : JSON.stringify(err.response.data.detail);
       }
-      setError(msg); 
+      setError(msg);
     }
     finally { setIsValidatingCode(false); }
   };
@@ -151,68 +151,52 @@ export default function AdminOnboarding() {
   // --- UPDATED HANDLE ACTIVATE (STAGE 10) ---
   const handleActivate = async () => {
     setSubmitting(true);
-    setError(""); // Reset error
+    setError("");
 
     try {
-      // FRONTEND DATA HARVESTING: Explicit pull from state
+      const token = localStorage.getItem('token'); // 1. Get the Key
       const fd = new FormData();
-      fd.append('full_name', form.name || "");
-      fd.append('email', form.email || "");
-      fd.append('phone', form.phone || "");
-      fd.append('uid', form.uid || "");
-      fd.append('password', form.password || "");
-      
-      // MAPPING: adminBody state maps to 'scope' on backend
-      fd.append('scope', form.adminBody || "General");
-      fd.append('specific_role', form.specificRole || "Desk_Officer");
-      fd.append('workspace_code', form.workspaceCode || "");
-      fd.append('admin_domain', form.adminDomain || "All");
 
-      // Workforce Prerequisites (Industrial Defaults)
+      // Sync these names EXACTLY with the Python Form(...) above
+      fd.append('full_name', form.name);
+      fd.append('email', form.email);
+      fd.append('phone', form.phone);
+      fd.append('uid', form.uid);
+      fd.append('password', form.password);
+      fd.append('scope', form.adminBody);
+      fd.append('specific_role', form.specificRole);
+      fd.append('workspace_code', form.workspaceCode);
+      fd.append('admin_domain', form.adminDomain || "All");
       fd.append('sla', 24);
       fd.append('desks', 5);
       fd.append('workers', 20);
 
-      // DEBUG LOGIC: Mandatory Payload Inspection
-      console.log("FINAL PAYLOAD:", Object.fromEntries(fd.entries()));
-
-      const token = localStorage.getItem('token');
       const res = await axios.post('http://localhost:8000/api/v1/system/configure', fd, {
-        headers: { Authorization: "Bearer " + token }
+        headers: { 
+          Authorization: "Bearer " + token,
+          'Content-Type': 'multipart/form-data'
+        }
       });
 
       if (res.data.status === 'success') {
-        toast.success("✅ Administrative Reality Anchored.");
-
-        // PERSISTENCE SYNC: Explicitly set ward for dashboard retrieval
-        localStorage.setItem('gov_ward', form.location);
-
-        // FINAL HANDSHAKE REDIRECT: Update global Auth state
+        // 3. Update Auth state so the system knows you are DONE with onboarding
         login({
           ...user,
-          name: form.name,
-          role: 'government',
-          specific_role: form.specificRole,
-          admin_role: form.specificRole, // Elevated Role Sync
-          ward: form.location,
-          is_setup_complete: 1
+          is_setup_complete: 1,
+          is_onboarded: true,
+          specific_role: form.specificRole
         }, token);
 
-        // Strict Navigation protocol
         navigate('/gov-landing');
       }
     } catch (err) {
-      console.error("DEBUG ERROR:", err.response?.data);
-      let msg = "Setup Failed";
-      if (err.response?.status === 422 && err.response?.data?.detail) {
-        // UI FEEDBACK: Handle FastAPI validation objects as Strings
-        msg = err.response.data.detail[0].msg;
-      } else if (err.response?.data?.detail) {
-        msg = typeof err.response.data.detail === 'string'
-          ? err.response.data.detail
-          : JSON.stringify(err.response.data.detail);
+      // 4. FIX: Ensure setError only receives a string. If the error is an object, use setError(err.response.data.detail)
+      const detail = err.response?.data?.detail;
+      if (typeof detail === 'object') {
+        setError(JSON.stringify(detail));
+      } else {
+        setError(detail || "Setup Error");
       }
-      setError(msg); 
     } finally {
       setSubmitting(false);
     }

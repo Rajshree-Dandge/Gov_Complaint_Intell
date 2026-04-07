@@ -4,7 +4,7 @@ from roboflow import Roboflow
 import os
 from dotenv import load_dotenv
 load_dotenv()
-
+from cryptography.fernet import Fernet
 
 # --- 2. CONFIGURATION & CLOUD CONNECTION ---
 # Replace with your actual Private API Key from the Roboflow 'Deploy' tab
@@ -62,3 +62,14 @@ def run_ai_detection(image_path):
             "label": "error", 
             "confidence": 0.0
         }
+
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+cipher_suite = Fernet(ENCRYPTION_KEY.encode()) if ENCRYPTION_KEY else None
+
+def decrypt_data(data_hex: str) -> str:
+    """Safe Decryption for the Officer Dashboards"""
+    try:
+        if not cipher_suite: return data_hex
+        return cipher_suite.decrypt(data_hex.encode()).decode()
+    except Exception:
+        return data_hex # Fallback for unencrypted seed data
