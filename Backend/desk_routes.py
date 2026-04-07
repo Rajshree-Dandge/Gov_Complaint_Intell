@@ -91,26 +91,33 @@ async def get_desk_inbox(ward: str, domain: str):
 @router.get("/severity-trend")
 async def get_severity_trend(ward: str, domain: str):
     try:
-        conn = sqlite3.connect("grievance.db")
-        cursor = conn.cursor()
-        
-        domain = domain.strip()
-        search_term = f"%{domain}%"
-        trend_data = []
-        for i in range(6, -1, -1):
-            date_str = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
-            day_name = (datetime.now() - timedelta(days=i)).strftime('%a')
+        with sqlite3.connect("grievance.db") as conn:
+            cursor = conn.cursor()
+            domain = domain.strip()
+            search_term = f"%{domain}%"
+            trend_data = []
             
-            # Updated to LIKE with robust Date matching
-            cursor.execute('''
-                SELECT COUNT(*) FROM complaints 
-                WHERE ward_zone=? AND ai_category LIKE ? AND date(created_at) = date(?)
-            ''', (ward, search_term, date_str))
+            for i in range(6, -1, -1):
+                # Calculate the date for the last 7 days
+                target_date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+                day_name = (datetime.now() - timedelta(days=i)).strftime('%a')
+                
+                # REVOLUTIONARY FIX: 
+                # 1. Use AVG(ai_score) to show real severity trend.
+                # 2. Use strftime to normalize the SQLite date comparison.
+                cursor.execute('''
+                    SELECT AVG(ai_score) FROM complaints 
+                    WHERE ward_zone=? AND ai_category LIKE ? 
+                    AND strftime('%Y-%m-%d', created_at) = ?
+                ''', (ward, search_term, target_date))
+                
+                avg_val = cursor.fetchone()[0]
+                # If no data for that day, return 0.0
+                score = round(float(avg_val), 1) if avg_val else 0.0
+                
+                trend_data.append({"day": day_name, "val": score})
             
-            count = cursor.fetchone()[0]
-            trend_data.append({"day": day_name, "val": count})
-            
-        conn.close()
-        return trend_data
+            return trend_data
     except Exception as e:
-        return [{"day": "N/A", "val": 0}]
+        print(f"Trend Calculation Error: {e}")
+        return []

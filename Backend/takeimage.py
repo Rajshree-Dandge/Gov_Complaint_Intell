@@ -553,7 +553,7 @@ async def submit_complaint(
         cursor.execute('''
             INSERT INTO complaints (
                 full_name, phone_number, language,
-                text_desc, location, latitude, longitude, ward_zone, image_path, status
+                description, location, latitude, longitude, ward_zone, image_path, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (
                 encrypted_name, encrypted_phone, language,
@@ -720,27 +720,32 @@ async def login(
 @app.get("/api/v1/user/profile")
 async def get_user_profile(current_user: str = Depends(get_current_user)):
     conn = sqlite3.connect(GOVT_DB)
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 🔍 REVOLUTIONARY FIX: Fetch name, role, location, domain, and setup status
-    cursor.execute(
-        "SELECT name, admin_role, location, admin_domain, is_setup_complete FROM government_officers WHERE email = ?", 
-        (current_user,)
-    )
+    # FETCH: Get the real-world identity of the officer
+    cursor.execute("""
+        SELECT name, admin_role, location, admin_domain, is_setup_complete 
+        FROM government_officers WHERE email = ?
+    """, (current_user,))
     user_data = cursor.fetchone()
     conn.close()
-    
-    if not user_data:
-        raise HTTPException(status_code=404, detail="Officer profile not found")
 
-    # Mapping indices: [0]=name, [1]=role, [2]=location, [3]=domain, [4]=is_setup_complete
+    if not user_data:
+        raise HTTPException(status_code=404, detail="Identity not found")
+
+    # FAIL-SAFE: If admin_domain is null, return "Roads"
+    db_domain = user_data["admin_domain"]
+    admin_domain = db_domain if (db_domain and db_domain.strip() != "") else "Roads"
+
+    # RETURN: No hardcoded strings here!
     return {
         "email": current_user,
-        "name": user_data[0],
-        "admin_role": user_data[1],
-        "ward": user_data[2],
-        "is_setup_complete": user_data[4],
-        "admin_domain": user_data[3] if user_data[3] else "Roads" # FAIL-SAFE fallback
+        "name": user_data["name"],
+        "admin_role": user_data["admin_role"],
+        "ward": user_data["location"],         
+        "admin_domain": admin_domain, 
+        "is_setup_complete": user_data["is_setup_complete"]
     }
 @app.get("/api/v1/system/status")
 async def get_system_status():

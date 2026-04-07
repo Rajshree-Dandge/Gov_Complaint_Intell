@@ -90,7 +90,7 @@ export default function DeskDashboard() {
                             <User size={18} />
                             <div className="profile-text">
                                 <strong>{user?.name || "Officer"}</strong>
-                                <small>{user?.admin_role} ({user?.admin_domain || "Roads"})</small>
+                                <small>{user?.admin_role} ({user?.admin_domain})</small>
                             </div>
                         </div>
                     </div>
@@ -105,7 +105,7 @@ export default function DeskDashboard() {
                         <header className="pane-header">
                             <h1 className="text-3xl font-black tracking-tight">Grievance Portfolio</h1>
                             <p className="text-slate-500 font-medium">
-                                Administrative Domain: <span className="text-emerald-600">{user?.admin_domain || "Roads"}</span>
+                                Administrative Domain: <span className="text-emerald-600">{user?.admin_domain}</span>
                                 | Jurisdiction: <span className="font-bold">{user?.ward || "General Zone"}</span>
                             </p>
                         </header>

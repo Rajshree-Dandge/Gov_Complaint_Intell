@@ -78,7 +78,7 @@ def seed_grievances():
     # --- SQL INJECTION ---
     cursor.executemany('''
         INSERT INTO complaints (
-            full_name, phone_number, text_desc, location, image_path, 
+            full_name, phone_number, description, location, image_path, 
             status, priority, ai_category, ai_score, ward_zone, latitude, longitude, 
             created_at, deadline_at
         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
