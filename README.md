@@ -1,117 +1,126 @@
-# Gov AI for complaint Management
+<div align="center">
 
-## 📘 Academic Title
-**An AI-Based Complaint Intelligence System for Government Decision Support**
+# निvaran
 
----
+### AI-powered complaint management and decision-support platform for government administrators
 
-## 🎯 Problem Statement
+[![Built with JavaScript](https://img.shields.io/badge/Stack-JavaScript%20%7C%20NLP%20%7C%20ML-blue?style=for-the-badge)](https://github.com/Sakshi13-05)
+[![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen?style=for-the-badge)]()
 
-Government departments receive **large volumes of complaints** across multiple sectors.  
-Manual verification, prioritization, and routing of these complaints leads to:
+> **Not a citizen portal.** This is an internal intelligence tool for government officers, department heads, and policy makers to manage, prioritize, and act on complaints at scale.
 
-- Delayed responses
-- Inefficient resource allocation
-- Missed high-risk or high-impact issues
-- Poor visibility into departmental performance
-
-This project addresses these challenges by providing an **AI-driven intelligence and decision-support system** for government administrators.
+</div>
 
 ---
 
-## 👥 Primary Users
+## 🚨 The Problem
 
-- Government Officers  
-- Department Heads  
-- Policy Makers  
-- Administrative Analysts  
-
-> ⚠️ This system is **not intended for citizens**.
-
----
-
-## 🔑 Core Features
-
-### 1. Complaint Verification
-- Detects incomplete, irrelevant, or suspicious complaints
-- Flags potentially fake or low-quality submissions
-
-### 2. Complaint Classification (ML/NLP)
-- Automatically categorizes complaints by:
-  - Department
-  - Issue type
-  - Severity
-- Uses Natural Language Processing for text understanding
-
-### 3. Priority Scoring Engine
-Complaints are scored based on:
-- **Impact** (public safety, infrastructure, welfare)
-- **Urgency** (time sensitivity)
-- **Volume** (number of similar complaints)
-
-### 4. Duplicate Detection & Merging
-- Identifies duplicate or near-duplicate complaints
-- Merges them into a single actionable case
-
-### 5. Sentiment & Risk Analysis
-- Sentiment detection (anger, distress, urgency)
-- Risk flagging for:
-  - Law & order issues
-  - Public safety threats
-  - Media-sensitive cases
-
-### 6. Department Auto-Routing
-- Automatically assigns complaints to the appropriate department
-- Reduces manual forwarding delays
-
-### 7. SLA Tracking & Escalation
-- Tracks resolution timelines
-- Auto-escalates complaints when SLA thresholds are breached
-
-### 8. Performance Analytics Dashboard
-- Department-wise performance metrics
-- Resolution time analysis
-- Backlog and trend visualization
-
-### 9. Predictive Insights
-- Forecasts complaint surges
-- Identifies recurring governance issues
-- Supports proactive policy decisions
-
-### 10. Report Generation
-- Generates administrative and policy-level reports
-- Exportable formats for audits and reviews
+Government departments receive thousands of complaints daily. Manual processing leads to:
+- Critical issues getting buried under low-priority noise
+- Wrong departments receiving misdirected complaints
+- Zero visibility into resolution performance
+- No early warning for complaint surges or public safety risks
 
 ---
 
-## 🚫 Out of Scope (What This Project Does NOT Do)
+## 💡 The Solution
 
-- ❌ No citizen-facing user interface  
-- ❌ No complaint filing or submission portal  
-- ❌ No social media scraping or public feedback ingestion  
-
-> The system operates **only on existing complaint datasets** provided internally.
+An AI-driven backend intelligence system that automatically verifies, classifies, prioritizes, and routes complaints — giving administrators a real-time decision-support dashboard instead of a messy inbox.
 
 ---
 
-## 🧠 Technology Focus
+## ✨ Core Features
 
-- **Machine Learning**
-  - Classification
-  - Clustering
-  - Priority scoring models
-- **Natural Language Processing (NLP)**
-  - Text preprocessing
-  - Sentiment analysis
-  - Semantic similarity detection
-- **Data Analytics**
-  - Trend analysis
-  - KPI dashboards
-- **Secure Admin Dashboards**
-  - Role-based access
-  - Audit logging
+| Feature | What it does |
+|--------|-------------|
+| 🔍 Complaint Verification | Detects fake, incomplete, or low-quality submissions |
+| 🏷️ Auto Classification | NLP-based categorization by department, issue type, and severity |
+| ⚡ Priority Scoring | Scores each complaint on impact, urgency, and volume |
+| 🔗 Duplicate Detection | Merges near-duplicate complaints into single actionable cases |
+| 😤 Sentiment & Risk Analysis | Flags law & order issues, public safety threats, media-sensitive cases |
+| 📬 Auto Routing | Assigns complaints to correct department automatically |
+| ⏱️ SLA Tracking | Monitors resolution timelines and auto-escalates breaches |
+| 📊 Analytics Dashboard | Department performance, backlog trends, KPI visualization |
+| 🔮 Predictive Insights | Forecasts complaint surges and recurring governance issues |
+| 📄 Report Generation | Exportable admin and policy-level reports for audits |
 
 ---
 
-## 🏗️ System Architecture (High-Level)
+## 🧠 Tech & AI Stack
 
+```
+ML / NLP
+├── Text classification (complaint categorization)
+├── Clustering (duplicate detection)
+├── Sentiment analysis (risk flagging)
+├── Semantic similarity (near-duplicate merging)
+└── Priority scoring models
+
+Frontend
+├── JavaScript
+├── Dynamic admin dashboard
+└── Role-based access UI
+
+Backend / Data
+├── REST APIs for complaint ingestion
+├── Analytics pipeline
+└── Audit logging
+```
+
+---
+
+## 🏗️ System Architecture
+
+```
+[Complaint Dataset] 
+        ↓
+[Verification Layer] → filters fake/incomplete
+        ↓
+[NLP Classification Engine] → department + severity + type
+        ↓
+[Priority Scoring Engine] → impact + urgency + volume score
+        ↓
+[Duplicate Detection] → merges near-duplicates
+        ↓
+[Auto Router] → assigns to correct department
+        ↓
+[Admin Dashboard] ← SLA tracker + sentiment flags + analytics
+```
+
+---
+
+## 🚫 Out of Scope
+
+This system does **not** include:
+- A citizen-facing complaint portal
+- Social media scraping
+- Public feedback ingestion
+
+It operates exclusively on **internally provided complaint datasets**.
+
+---
+
+## 📈 Roadmap
+
+- [x] Complaint classification with NLP
+- [x] Priority scoring engine
+- [x] Duplicate detection
+- [x] Sentiment & risk analysis
+- [x] Department auto-routing
+- [ ] Live SLA tracking dashboard
+- [ ] Predictive surge forecasting
+- [ ] PDF report export
+- [ ] Role-based admin access control
+
+---
+
+## 🙋‍♀️ Developer
+
+Built by **Sakshi Chavan** && **Rajshree Dandge** — CS student at Terna Engineering College, exploring AI/ML applications in civic tech and governance.
+
+
+---
+
+<div align="center">
+⭐ Star this repo if you find it interesting — it motivates continued development!
+</div>
